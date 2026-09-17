@@ -1,0 +1,3 @@
+# Direct dependencies verified during this setup step.
+fastapi==0.141.1
+uvicorn==0.53.0
