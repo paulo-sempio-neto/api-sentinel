@@ -92,6 +92,40 @@ def list_endpoints() -> list[dict[str, int | str]]:
     return [dict(row) for row in rows]
 
 
+@app.put("/endpoints/{endpoint_id}")
+def update_endpoint(
+    endpoint_id: int, endpoint: EndpointCreate
+) -> dict[str, int | str]:
+    """Updates the name and URL of a registered endpoint."""
+    connection = get_connection()
+
+    try:
+        cursor = connection.execute(
+            "UPDATE endpoints SET name = ?, url = ? WHERE id = ?",
+            (endpoint.name, str(endpoint.url), endpoint_id),
+        )
+        connection.commit()
+    except sqlite3.IntegrityError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This URL is already registered.",
+        ) from error
+    finally:
+        connection.close()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Endpoint not found.",
+        )
+
+    return {
+        "id": endpoint_id,
+        "name": endpoint.name,
+        "url": str(endpoint.url),
+    }
+
+
 @app.delete("/endpoints/{endpoint_id}")
 def delete_endpoint(endpoint_id: int) -> dict[str, str]:
     """Deletes one registered endpoint."""

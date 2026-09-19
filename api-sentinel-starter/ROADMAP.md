@@ -19,8 +19,10 @@
 - [x] Validate HTTP/HTTPS URLs and reject duplicate URLs
 - [x] Trim endpoint names and reject empty or whitespace-only names
 - [x] List registered endpoints
-- [ ] Update an endpoint
+- [x] Update an endpoint's name and URL
 - [x] Delete an endpoint
+- [x] Return 409 for duplicate URLs and 404 for missing endpoints on update/delete
+- [x] Add endpoint management tests using an isolated temporary SQLite database
 
 ## Phase 3 — Monitoring
 
@@ -34,7 +36,7 @@
 ## Phase 4 — Final CS50 delivery
 
 - [ ] Add automated checks while the program is running
-- [ ] Add tests
+- [ ] Extend tests to cover monitoring, history, and scheduling
 - [x] Document current features and local setup in the README
 - [ ] Complete the README with monitoring, history, UI, and test instructions
 - [ ] Record the demonstration video

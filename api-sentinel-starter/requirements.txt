@@ -3,3 +3,7 @@ fastapi==0.141.1
 httpx==0.28.1
 pydantic==2.13.5
 uvicorn==0.53.0
+
+# Automated tests; HTTPX2 is used by the current Starlette TestClient.
+pytest==9.1.1
+httpx2==2.13.0
