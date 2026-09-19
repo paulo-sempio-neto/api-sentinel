@@ -2,9 +2,9 @@
 
 Projeto de portfólio e projeto final do CS50x para monitorar endpoints HTTP.
 Nesta etapa, a aplicação oferece uma API para cadastrar, listar, editar e excluir URLs,
-com persistência em SQLite e funções internas para armazenar e consultar resultados
-de verificações. Verificações HTTP reais, rotas de consulta do histórico, interface
-web e agendamento ainda não estão implementados.
+com persistência em SQLite e verificações HTTP manuais que gravam e retornam seus
+resultados. Rotas de consulta do histórico, interface web e monitoramento
+automático/agendado ainda não estão implementados.
 
 ## Funcionalidades atuais
 
@@ -16,6 +16,7 @@ web e agendamento ainda não estão implementados.
 | `GET /endpoints` | Lista os endpoints cadastrados |
 | `PUT /endpoints/{endpoint_id}` | Atualiza nome e URL de um endpoint |
 | `DELETE /endpoints/{endpoint_id}` | Exclui um endpoint |
+| `POST /endpoints/{endpoint_id}/check` | Executa uma verificação HTTP e retorna o resultado salvo |
 | `GET /docs` | Abre a documentação interativa da API |
 
 O nome tem os espaços das extremidades removidos e não pode ficar vazio.
@@ -41,7 +42,7 @@ Esta etapa foi validada com Python 3.14.3 no Windows. Instale o Python 3.14 com 
 comando `py` disponível antes de seguir as instruções.
 
 As dependências diretas estão em `requirements.txt`: FastAPI, Uvicorn, Pydantic e
-HTTPX. HTTPX já é importado pelo código, mas ainda não é usado para monitorar URLs.
+HTTPX. A aplicação usa HTTPX para executar as verificações manuais.
 SQLite e os demais módulos da biblioteca padrão vêm com o Python. As dependências
 de testes também estão no arquivo: pytest e HTTPX2, usado pelo `TestClient` da
 versão atual do Starlette (base do FastAPI).
@@ -127,7 +128,41 @@ Chaves estrangeiras são ativadas em cada conexão. Gravar um resultado para um
 endpoint inexistente gera `sqlite3.IntegrityError`. Excluir um endpoint também
 exclui seu histórico (`ON DELETE CASCADE`); editar o endpoint preserva seus
 resultados, vinculados ao ID. O histórico não guarda uma cópia da URL antiga.
-Nenhuma dessas funções executa requisições HTTP, e não há novas rotas nesta etapa.
+Essas funções de persistência não executam requisições HTTP.
+
+## Verificação manual (Etapa 4)
+
+Com a API em execução e um endpoint cadastrado, use a documentação `/docs` ou
+execute o comando abaixo, substituindo `1` pelo ID desejado:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/endpoints/1/check"
+```
+
+A função `perform_endpoint_check(endpoint_id)` busca a URL atual, executa um único
+GET com `httpx`, grava o resultado por `save_check_result(...)` e devolve o registro
+criado. O modelo não armazena método HTTP ou status esperado: nesta etapa, apenas
+respostas **2xx** representam sucesso. Respostas 3xx, 4xx e 5xx são falhas, com o
+código HTTP preservado e `error_message` nulo. Redirecionamentos não são seguidos.
+
+O timeout é definido uma vez, em `CHECK_TIMEOUT_SECONDS = 10.0`, em `app.py`.
+Ele limita cada operação de conexão/leitura/escrita/espera por conexão do HTTPX;
+não representa um limite total de 10 segundos para toda a checagem. A duração é
+medida com `time.perf_counter()` e salva em milissegundos, incluindo o tempo até
+uma falha. O horário UTC registrado é o início da tentativa. O corpo da resposta
+é recebido pelo HTTPX, mas não é armazenado nem retornado pela API Sentinel.
+
+Timeouts, falhas de conexão/DNS/TLS e outros `httpx.RequestError` são registrados
+com `success=false`, `status_code=null` e uma mensagem curta, sem traceback ou
+detalhes internos. A rota retorna HTTP `200` com o resultado, mesmo se o serviço
+monitorado estiver indisponível. Um ID inexistente retorna `404`, sem requisição
+externa e sem criar histórico.
+
+A resposta contém `id`, `endpoint_id`, `checked_at`, `success`, `status_code`,
+`response_time_ms` e `error_message`, com os mesmos valores persistidos. Cada
+chamada cria exatamente um resultado. Não há retries; a verificação de
+certificados TLS continua ativa, e configurações de proxy do ambiente não são
+herdadas (`trust_env=False`). Não há agendamento nem rota para listar o histórico.
 
 ## Testes automatizados
 
@@ -147,9 +182,12 @@ que uma edição com URL duplicada não altera os dados e que manter a própria 
 é permitido. Os testes de persistência cobrem sucessos, falhas com campos nulos,
 ordenação, isolamento entre endpoints, integridade referencial, exclusão em cascata
 e inicialização sobre um banco existente sem perda de dados.
+Os testes de checagem manual usam `httpx.MockTransport` para simular respostas e
+exceções, com um relógio controlado para conferir a duração. O transporte HTTPX
+real é bloqueado durante os testes; nenhuma URL é acessada pela internet.
 
 ## Próximas etapas
 
 O [ROADMAP.md](ROADMAP.md) acompanha as funcionalidades existentes e planejadas:
-verificações manuais, consulta do histórico pela API, verificações periódicas, interface web e ampliação
+consulta do histórico pela API, verificações periódicas, interface web e ampliação
 dos testes automatizados para essas funcionalidades.

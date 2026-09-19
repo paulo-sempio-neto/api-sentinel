@@ -29,11 +29,12 @@
 - [x] Add persistent check storage with endpoint foreign keys
 - [x] Add internal functions to save results and retrieve newest-first history
 - [x] Test persistence, isolation, startup compatibility, and cascading deletion
-- [ ] Perform manual endpoint checks
-- [ ] Record HTTP status codes
-- [ ] Measure response time
-- [ ] Record connection errors
-- [ ] Connect real HTTP checks to the persistence functions
+- [x] Perform manual endpoint checks (GET, 2xx success, finite timeout, no redirects/retries)
+- [x] Record HTTP status codes
+- [x] Measure response time
+- [x] Record connection errors
+- [x] Connect real HTTP checks to the persistence functions
+- [x] Test manual checks offline with mocked HTTP responses and network errors
 - [ ] Expose endpoint history through the API
 
 ## Phase 4 — Final CS50 delivery

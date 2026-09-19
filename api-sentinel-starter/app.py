@@ -6,13 +6,16 @@ import sqlite3
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Annotated
 
 import httpx
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, HttpUrl, StringConstraints
 
-from database import get_connection, initialize_database
+from database import get_connection, initialize_database, save_check_result
+
+CHECK_TIMEOUT_SECONDS = 10.0
 
 
 @asynccontextmanager
@@ -124,6 +127,68 @@ def update_endpoint(
         "name": endpoint.name,
         "url": str(endpoint.url),
     }
+
+
+def perform_endpoint_check(endpoint_id: int) -> dict[str, int | float | str | bool | None]:
+    """Executes one GET request and persists its result before returning it."""
+    connection = get_connection()
+    try:
+        endpoint = connection.execute(
+            "SELECT id, url FROM endpoints WHERE id = ?", (endpoint_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+
+    if endpoint is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Endpoint not found.",
+        )
+
+    checked_at = datetime.now(timezone.utc)
+    status_code = None
+    error_message = None
+    started_at = time.perf_counter()
+    try:
+        response = httpx.get(
+            endpoint["url"],
+            timeout=CHECK_TIMEOUT_SECONDS,
+            follow_redirects=False,
+            trust_env=False,
+        )
+        status_code = response.status_code
+    except httpx.TimeoutException:
+        error_message = "Request timed out."
+    except httpx.ConnectError:
+        error_message = "Could not connect to endpoint."
+    except httpx.RequestError:
+        error_message = "HTTP request failed."
+    response_time_ms = (time.perf_counter() - started_at) * 1000
+    success = status_code is not None and 200 <= status_code < 300
+
+    check_id = save_check_result(
+        endpoint_id,
+        success,
+        status_code=status_code,
+        response_time_ms=response_time_ms,
+        error_message=error_message,
+        checked_at=checked_at,
+    )
+    return {
+        "id": check_id,
+        "endpoint_id": endpoint_id,
+        "checked_at": checked_at.isoformat(timespec="microseconds"),
+        "success": success,
+        "status_code": status_code,
+        "response_time_ms": response_time_ms,
+        "error_message": error_message,
+    }
+
+
+@app.post("/endpoints/{endpoint_id}/check")
+def check_endpoint(endpoint_id: int) -> dict[str, int | float | str | bool | None]:
+    """Returns a stored check result, including failures of the monitored service."""
+    return perform_endpoint_check(endpoint_id)
 
 
 @app.delete("/endpoints/{endpoint_id}")
