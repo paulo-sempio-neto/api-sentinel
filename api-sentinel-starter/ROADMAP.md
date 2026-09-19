@@ -26,12 +26,15 @@
 
 ## Phase 3 — Monitoring
 
+- [x] Add persistent check storage with endpoint foreign keys
+- [x] Add internal functions to save results and retrieve newest-first history
+- [x] Test persistence, isolation, startup compatibility, and cascading deletion
 - [ ] Perform manual endpoint checks
 - [ ] Record HTTP status codes
 - [ ] Measure response time
 - [ ] Record connection errors
-- [ ] Save check results in SQLite
-- [ ] Show endpoint history
+- [ ] Connect real HTTP checks to the persistence functions
+- [ ] Expose endpoint history through the API
 
 ## Phase 4 — Final CS50 delivery
 

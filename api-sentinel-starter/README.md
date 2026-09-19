@@ -2,8 +2,9 @@
 
 Projeto de portfólio e projeto final do CS50x para monitorar endpoints HTTP.
 Nesta etapa, a aplicação oferece uma API para cadastrar, listar, editar e excluir URLs,
-com persistência em SQLite. Monitoramento, histórico, interface web e agendamento
-ainda não estão implementados.
+com persistência em SQLite e funções internas para armazenar e consultar resultados
+de verificações. Verificações HTTP reais, rotas de consulta do histórico, interface
+web e agendamento ainda não estão implementados.
 
 ## Funcionalidades atuais
 
@@ -108,8 +109,25 @@ O arquivo é sempre `api-sentinel-starter/api_sentinel.db`, ao lado de
 A inicialização ocorre no ciclo de vida do FastAPI (`lifespan`), quando o servidor
 inicia. Importar o módulo não cria o banco.
 
-A tabela é criada somente se ainda não existir; os cadastros existentes são
+As tabelas são criadas somente se ainda não existirem; os cadastros existentes são
 preservados. O banco local é ignorado pelo Git.
+
+### Persistência do histórico (Etapa 3)
+
+A tabela `checks` armazena `id`, `endpoint_id`, `checked_at` (texto ISO 8601 em UTC),
+`success` (0 ou 1), `status_code`, `response_time_ms` e `error_message`. Os três
+últimos campos aceitam `NULL`; a duração, quando informada, não pode ser negativa.
+
+As funções internas de `database.py` recebem resultados já calculados:
+
+- `save_check_result(endpoint_id, success, *, status_code=None, response_time_ms=None, error_message=None, checked_at=None)` grava o resultado e retorna seu ID. `checked_at` aceita um `datetime` com fuso horário; se omitido, usa o instante atual em UTC.
+- `get_check_history(endpoint_id)` retorna uma lista de dicionários, com `success` convertido para booleano. Ordena por horário decrescente e, em caso de empate, por ID decrescente. Retorna `[]` se não houver histórico ou se o endpoint não existir.
+
+Chaves estrangeiras são ativadas em cada conexão. Gravar um resultado para um
+endpoint inexistente gera `sqlite3.IntegrityError`. Excluir um endpoint também
+exclui seu histórico (`ON DELETE CASCADE`); editar o endpoint preserva seus
+resultados, vinculados ao ID. O histórico não guarda uma cópia da URL antiga.
+Nenhuma dessas funções executa requisições HTTP, e não há novas rotas nesta etapa.
 
 ## Testes automatizados
 
@@ -126,10 +144,12 @@ não é usado nem alterado, e nenhuma URL cadastrada é acessada pela rede.
 A suíte cobre cadastro, listagem, nomes vazios ou com espaços, URLs duplicadas,
 edição, exclusão e respostas `404` para endpoints inexistentes. Também verifica
 que uma edição com URL duplicada não altera os dados e que manter a própria URL
-é permitido.
+é permitido. Os testes de persistência cobrem sucessos, falhas com campos nulos,
+ordenação, isolamento entre endpoints, integridade referencial, exclusão em cascata
+e inicialização sobre um banco existente sem perda de dados.
 
 ## Próximas etapas
 
 O [ROADMAP.md](ROADMAP.md) acompanha as funcionalidades existentes e planejadas:
-verificações manuais, histórico, verificações periódicas, interface web e ampliação
+verificações manuais, consulta do histórico pela API, verificações periódicas, interface web e ampliação
 dos testes automatizados para essas funcionalidades.
