@@ -3,23 +3,35 @@
 # AI assistance: ChatGPT was used for guidance and code review.
 
 import sqlite3
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Annotated
 
+import httpx
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, StringConstraints
 
 from database import get_connection, initialize_database
 
-initialize_database()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initializes the database when the application starts."""
+    initialize_database()
+    yield
+
 
 app = FastAPI(
     title="API Sentinel",
     description="A service for monitoring HTTP endpoints.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 
 class EndpointCreate(BaseModel):
-    name: str
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
     url: HttpUrl
 
 

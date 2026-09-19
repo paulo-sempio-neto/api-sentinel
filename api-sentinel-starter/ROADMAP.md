@@ -5,17 +5,22 @@
 - [x] Create the project structure
 - [x] Create the FastAPI application
 - [x] Add the health check endpoint
-- [ ] Create a local virtual environment
-- [ ] Install dependencies
-- [ ] Run the API locally
+- [x] Choose the project-local virtual environment (`api-sentinel-starter/.venv`)
+- [x] Declare and install all direct dependencies
+- [x] Use a database path relative to the project files
+- [x] Initialize the database through the FastAPI lifespan
+- [x] Document Windows setup, activation, installation, and execution
+- [x] Run the API locally and verify `/health`
 
 ## Phase 2 — Endpoint management
 
-- [ ] Create an SQLite database
-- [ ] Add an endpoint to monitor
-- [ ] List registered endpoints
+- [x] Create an SQLite database
+- [x] Add an endpoint to monitor
+- [x] Validate HTTP/HTTPS URLs and reject duplicate URLs
+- [x] Trim endpoint names and reject empty or whitespace-only names
+- [x] List registered endpoints
 - [ ] Update an endpoint
-- [ ] Delete an endpoint
+- [x] Delete an endpoint
 
 ## Phase 3 — Monitoring
 
@@ -30,7 +35,8 @@
 
 - [ ] Add automated checks while the program is running
 - [ ] Add tests
-- [ ] Finish the README
+- [x] Document current features and local setup in the README
+- [ ] Complete the README with monitoring, history, UI, and test instructions
 - [ ] Record the demonstration video
 - [ ] Submit the final project
 

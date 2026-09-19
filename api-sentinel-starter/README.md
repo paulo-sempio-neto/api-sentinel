@@ -1,35 +1,108 @@
 # API Sentinel
 
-API Sentinel is an HTTP endpoint monitoring service built as my final project for CS50x.
+Projeto de portfólio e projeto final do CS50x para monitorar endpoints HTTP.
+Nesta etapa, a aplicação oferece uma API para cadastrar, listar e excluir URLs,
+com persistência em SQLite. Monitoramento, histórico, interface web e agendamento
+ainda não estão implementados.
 
-The project will allow users to register web services and APIs, check whether they are available, measure response time, and store a history of each verification.
+## Funcionalidades atuais
 
-## Current features
+| Método e rota | Função |
+| --- | --- |
+| `GET /health` | Confirma que o API Sentinel está executando |
+| `GET /about` | Exibe informações do projeto |
+| `POST /endpoints` | Cadastra nome e URL HTTP/HTTPS |
+| `GET /endpoints` | Lista os endpoints cadastrados |
+| `DELETE /endpoints/{endpoint_id}` | Exclui um endpoint |
+| `GET /docs` | Abre a documentação interativa da API |
 
-- `GET /health` endpoint to confirm that API Sentinel is running
-- Interactive API documentation provided by FastAPI
+O nome tem os espaços das extremidades removidos e não pode ficar vazio.
+Dados inválidos retornam `422`, URLs duplicadas retornam `409` e excluir um
+endpoint inexistente retorna `404`. A rota `/health` verifica o API Sentinel,
+não as URLs cadastradas.
 
-## Planned CS50 version
+## Ambiente e dependências
 
-- Register an endpoint to monitor
-- List registered endpoints
-- Run a manual availability check
-- Store status codes, response times, timestamps, and errors in SQLite
-- View the check history for each endpoint
-- Add automated checks while the application is running
-- Add tests and complete documentation
+O ambiente virtual escolhido é **`api-sentinel-starter\.venv`**. Todos os comandos
+abaixo usam esse ambiente. O `.venv` da pasta superior não faz parte deste fluxo
+e não precisa ser ativado nem excluído.
 
-## Technology
+Esta etapa foi validada com Python 3.14.3 no Windows. Instale o Python 3.14 com o
+comando `py` disponível antes de seguir as instruções.
 
-- Python
-- FastAPI
-- SQLite
-- HTTPX
-- Pytest
+As dependências diretas estão em `requirements.txt`: FastAPI, Uvicorn, Pydantic e
+HTTPX. HTTPX já é importado pelo código, mas ainda não é usado para monitorar URLs.
+SQLite e os demais módulos da biblioteca padrão vêm com o Python. Pytest é uma
+melhoria futura e ainda não é uma dependência do projeto.
 
-## Installation
+## Instalação no Windows (PowerShell)
 
-Create a virtual environment:
+Abra um novo terminal PowerShell e entre na pasta que contém `app.py`.
+Neste checkout, o caminho é o seguinte; ajuste-o se o projeto estiver em outro local:
 
 ```powershell
-py -3 -m venv .venv
+cd "C:\Users\USER\Downloads\API-Sentinel-Begin\api-sentinel-starter"
+```
+
+Crie o ambiente virtual na primeira instalação. Se `.venv` já existir nesta pasta,
+reutilize-o e siga para a ativação:
+
+```powershell
+py -3.14 -m venv .venv
+```
+
+Ative o ambiente:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Se o PowerShell bloquear o script de ativação, continue com os comandos abaixo:
+eles usam diretamente o Python do ambiente escolhido e dispensam a ativação.
+
+Instale as dependências e confira se são compatíveis:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip check
+```
+
+## Executar e verificar a API
+
+Na mesma pasta, inicie o servidor de desenvolvimento:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
+```
+
+Mantenha esse terminal aberto. Em outro terminal PowerShell, verifique a aplicação:
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
+```
+
+A resposta deve ter os valores abaixo, com status HTTP `200`:
+
+```json
+{"status":"ok","service":"api-sentinel"}
+```
+
+Abra <http://127.0.0.1:8000/docs> no navegador para experimentar as rotas.
+Use `Ctrl+C` no terminal do servidor para encerrar a aplicação. Se tiver ativado
+o ambiente virtual, execute `deactivate` para sair dele.
+
+## Banco de dados
+
+O arquivo é sempre `api-sentinel-starter/api_sentinel.db`, ao lado de
+`database.py`, independentemente da pasta a partir da qual o Python é executado.
+A inicialização ocorre no ciclo de vida do FastAPI (`lifespan`), quando o servidor
+inicia. Importar o módulo não cria o banco.
+
+A tabela é criada somente se ainda não existir; os cadastros existentes são
+preservados. O banco local é ignorado pelo Git.
+
+## Próximas etapas
+
+O [ROADMAP.md](ROADMAP.md) acompanha as funcionalidades existentes e planejadas:
+edição de endpoints, verificações manuais, histórico, verificações periódicas,
+interface web e testes automatizados.
