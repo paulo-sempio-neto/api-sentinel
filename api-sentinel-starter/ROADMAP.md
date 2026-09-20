@@ -46,14 +46,17 @@
 - [x] Isolate endpoint failures and reload endpoints on every monitoring cycle
 - [x] Stop the monitoring task through the FastAPI lifespan
 - [x] Extend tests to cover monitoring, history, and scheduling
+- [x] Add a server-rendered dashboard and endpoint detail/history pages
+- [x] Add browser forms for endpoint creation, editing, deletion, and manual checks
+- [x] Test the UI without network access or changes to the JSON API
 - [x] Document current features and local setup in the README
-- [ ] Complete the README with UI and final delivery instructions
+- [ ] Complete the README with final delivery instructions
 - [ ] Record the demonstration video
 - [ ] Submit the final project
 
 ## Phase 5 — Portfolio improvements
 
-- [ ] Build a visual dashboard
+- [x] Build a simple responsive visual dashboard
 - [ ] Add user authentication
 - [ ] Add email or Discord alerts
 - [ ] Deploy the application online

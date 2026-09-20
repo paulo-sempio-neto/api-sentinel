@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Endpoint não encontrado · API Sentinel{% endblock %}
+
+{% block content %}
+<section class="panel not-found">
+    <p class="eyebrow">Erro 404</p>
+    <h1>Endpoint não encontrado</h1>
+    <p>O endpoint solicitado não existe ou já foi removido.</p>
+    <a class="button button-primary" href="{{ url_for('dashboard') }}">Voltar ao dashboard</a>
+</section>
+{% endblock %}

@@ -9,11 +9,16 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
+from urllib.parse import parse_qs
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, status
-from pydantic import BaseModel, HttpUrl, StringConstraints
+from fastapi import FastAPI, HTTPException, Query, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, HttpUrl, StringConstraints, ValidationError
 
 from database import (
     get_check_history,
@@ -25,6 +30,8 @@ from database import (
 CHECK_TIMEOUT_SECONDS = 10.0
 MONITOR_INTERVAL_SECONDS = 60.0
 MONITORING_ENABLED = True
+UI_HISTORY_LIMIT = 25
+PROJECT_DIRECTORY = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +118,12 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.mount(
+    "/static",
+    StaticFiles(directory=PROJECT_DIRECTORY / "static"),
+    name="static",
+)
+templates = Jinja2Templates(directory=PROJECT_DIRECTORY / "templates")
 
 
 class EndpointCreate(BaseModel):
@@ -315,3 +328,229 @@ def delete_endpoint(endpoint_id: int) -> dict[str, str]:
         )
 
     return {"message": "Endpoint deleted."}
+
+
+def get_endpoint_record(endpoint_id: int) -> dict[str, int | str] | None:
+    """Loads one endpoint for server-rendered pages without changing it."""
+    connection = get_connection()
+    try:
+        row = connection.execute(
+            "SELECT id, name, url FROM endpoints WHERE id = ?", (endpoint_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    return dict(row) if row is not None else None
+
+
+def get_dashboard_endpoints() -> list[dict]:
+    """Combines endpoints with their latest persisted result for the dashboard."""
+    dashboard_endpoints = []
+    for endpoint in list_endpoints():
+        history = get_check_history(endpoint["id"], limit=1)
+        dashboard_endpoints.append(
+            {**endpoint, "latest": history[0] if history else None}
+        )
+    return dashboard_endpoints
+
+
+async def read_endpoint_form(
+    request: Request,
+) -> tuple[dict[str, str], EndpointCreate | None]:
+    """Parses the small URL-encoded UI form and applies the API's model validation."""
+    try:
+        fields = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
+    except UnicodeDecodeError:
+        return {"name": "", "url": ""}, None
+
+    form_values = {
+        "name": fields.get("name", [""])[0],
+        "url": fields.get("url", [""])[0],
+    }
+    try:
+        return form_values, EndpointCreate(**form_values)
+    except ValidationError:
+        return form_values, None
+
+
+def dashboard_context(
+    *,
+    form_values: dict[str, str] | None = None,
+    error: str | None = None,
+) -> dict:
+    """Builds dashboard template data using persisted results only."""
+    return {
+        "endpoints": get_dashboard_endpoints(),
+        "form_values": form_values or {"name": "", "url": ""},
+        "error": error,
+    }
+
+
+def detail_context(
+    endpoint: dict[str, int | str],
+    *,
+    form_values: dict[str, str] | None = None,
+    error: str | None = None,
+) -> dict:
+    """Builds endpoint detail data with a bounded, newest-first history."""
+    return {
+        "endpoint": endpoint,
+        "history": get_check_history(endpoint["id"], limit=UI_HISTORY_LIMIT),
+        "history_limit": UI_HISTORY_LIMIT,
+        "form_values": form_values
+        or {"name": str(endpoint["name"]), "url": str(endpoint["url"])},
+        "error": error,
+    }
+
+
+def ui_not_found(request: Request) -> HTMLResponse:
+    """Returns the UI-specific endpoint-not-found page."""
+    return templates.TemplateResponse(
+        request=request,
+        name="not_found.html",
+        status_code=status.HTTP_404_NOT_FOUND,
+    )
+
+
+@app.get("/", response_class=HTMLResponse, name="dashboard")
+def dashboard(request: Request) -> HTMLResponse:
+    """Renders registered endpoints and their latest persisted results."""
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=dashboard_context(),
+    )
+
+
+@app.post("/ui/endpoints", response_class=HTMLResponse, name="ui_create_endpoint")
+async def ui_create_endpoint(request: Request) -> HTMLResponse:
+    """Creates an endpoint with the existing API model, then redirects home."""
+    form_values, endpoint = await read_endpoint_form(request)
+    if endpoint is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="dashboard.html",
+            context=dashboard_context(
+                form_values=form_values,
+                error="Informe um nome e uma URL HTTP/HTTPS válidos.",
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+    try:
+        await asyncio.to_thread(create_endpoint, endpoint)
+    except HTTPException as error:
+        return templates.TemplateResponse(
+            request=request,
+            name="dashboard.html",
+            context=dashboard_context(
+                form_values=form_values,
+                error=str(error.detail),
+            ),
+            status_code=error.status_code,
+        )
+
+    return RedirectResponse(
+        url=str(request.url_for("dashboard")),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@app.get(
+    "/ui/endpoints/{endpoint_id}",
+    response_class=HTMLResponse,
+    name="ui_endpoint_detail",
+)
+def ui_endpoint_detail(request: Request, endpoint_id: int) -> HTMLResponse:
+    """Renders one endpoint and its recent persisted history."""
+    endpoint = get_endpoint_record(endpoint_id)
+    if endpoint is None:
+        return ui_not_found(request)
+    return templates.TemplateResponse(
+        request=request,
+        name="endpoint_detail.html",
+        context=detail_context(endpoint),
+    )
+
+
+@app.post(
+    "/ui/endpoints/{endpoint_id}/check",
+    response_class=HTMLResponse,
+    name="ui_check_endpoint",
+)
+async def ui_check_endpoint(request: Request, endpoint_id: int) -> HTMLResponse:
+    """Executes the shared manual check and redirects to the updated detail page."""
+    try:
+        await asyncio.to_thread(perform_endpoint_check, endpoint_id)
+    except HTTPException as error:
+        if error.status_code == status.HTTP_404_NOT_FOUND:
+            return ui_not_found(request)
+        raise
+    return RedirectResponse(
+        url=str(request.url_for("ui_endpoint_detail", endpoint_id=endpoint_id)),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@app.post(
+    "/ui/endpoints/{endpoint_id}/edit",
+    response_class=HTMLResponse,
+    name="ui_update_endpoint",
+)
+async def ui_update_endpoint(request: Request, endpoint_id: int) -> HTMLResponse:
+    """Updates an endpoint with the same model and conflict rules as the JSON API."""
+    current_endpoint = get_endpoint_record(endpoint_id)
+    if current_endpoint is None:
+        return ui_not_found(request)
+
+    form_values, endpoint = await read_endpoint_form(request)
+    if endpoint is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="endpoint_detail.html",
+            context=detail_context(
+                current_endpoint,
+                form_values=form_values,
+                error="Informe um nome e uma URL HTTP/HTTPS válidos.",
+            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+    try:
+        await asyncio.to_thread(update_endpoint, endpoint_id, endpoint)
+    except HTTPException as error:
+        if error.status_code == status.HTTP_404_NOT_FOUND:
+            return ui_not_found(request)
+        return templates.TemplateResponse(
+            request=request,
+            name="endpoint_detail.html",
+            context=detail_context(
+                current_endpoint,
+                form_values=form_values,
+                error=str(error.detail),
+            ),
+            status_code=error.status_code,
+        )
+
+    return RedirectResponse(
+        url=str(request.url_for("ui_endpoint_detail", endpoint_id=endpoint_id)),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@app.post(
+    "/ui/endpoints/{endpoint_id}/delete",
+    response_class=HTMLResponse,
+    name="ui_delete_endpoint",
+)
+async def ui_delete_endpoint(request: Request, endpoint_id: int) -> HTMLResponse:
+    """Deletes an endpoint through POST and redirects to the dashboard."""
+    try:
+        await asyncio.to_thread(delete_endpoint, endpoint_id)
+    except HTTPException as error:
+        if error.status_code == status.HTTP_404_NOT_FOUND:
+            return ui_not_found(request)
+        raise
+    return RedirectResponse(
+        url=str(request.url_for("dashboard")),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )

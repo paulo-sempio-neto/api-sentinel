@@ -4,12 +4,14 @@ Projeto de portfólio e projeto final do CS50x para monitorar endpoints HTTP.
 Nesta etapa, a aplicação oferece uma API para cadastrar, listar, editar e excluir URLs,
 com persistência em SQLite e verificações HTTP manuais que gravam e retornam seus
 resultados, consulta do histórico pela API e monitoramento automático enquanto a
-aplicação está em execução. Interface web e alertas ainda não estão implementados.
+aplicação está em execução. Uma interface web server-rendered permite usar essas
+funções pelo navegador. Alertas, autenticação e deployment ainda não estão implementados.
 
 ## Funcionalidades atuais
 
 | Método e rota | Função |
 | --- | --- |
+| `GET /` | Abre o dashboard no navegador |
 | `GET /health` | Confirma que o API Sentinel está executando |
 | `GET /about` | Exibe informações do projeto |
 | `POST /endpoints` | Cadastra nome e URL HTTP/HTTPS |
@@ -18,6 +20,7 @@ aplicação está em execução. Interface web e alertas ainda não estão imple
 | `DELETE /endpoints/{endpoint_id}` | Exclui um endpoint |
 | `POST /endpoints/{endpoint_id}/check` | Executa uma verificação HTTP e retorna o resultado salvo |
 | `GET /endpoints/{endpoint_id}/checks` | Consulta o histórico salvo, com limite de resultados |
+| `GET /ui/endpoints/{endpoint_id}` | Exibe detalhes e histórico recente na interface |
 | `GET /docs` | Abre a documentação interativa da API |
 
 O nome tem os espaços das extremidades removidos e não pode ficar vazio.
@@ -42,8 +45,9 @@ e não precisa ser ativado nem excluído.
 Esta etapa foi validada com Python 3.14.3 no Windows. Instale o Python 3.14 com o
 comando `py` disponível antes de seguir as instruções.
 
-As dependências diretas estão em `requirements.txt`: FastAPI, Uvicorn, Pydantic e
-HTTPX. A aplicação usa HTTPX para executar as verificações manuais e automáticas.
+As dependências diretas estão em `requirements.txt`: FastAPI, Uvicorn, Pydantic,
+HTTPX e Jinja2. A aplicação usa HTTPX para executar as verificações manuais e
+automáticas e Jinja2 para renderizar HTML com escaping automático.
 SQLite e os demais módulos da biblioteca padrão vêm com o Python. As dependências
 de testes também estão no arquivo: pytest e HTTPX2, usado pelo `TestClient` da
 versão atual do Starlette (base do FastAPI).
@@ -101,6 +105,7 @@ A resposta deve ter os valores abaixo, com status HTTP `200`:
 ```
 
 Abra <http://127.0.0.1:8000/docs> no navegador para experimentar as rotas.
+Abra <http://127.0.0.1:8000/> para usar o dashboard.
 Use `Ctrl+C` no terminal do servidor para encerrar a aplicação. Se tiver ativado
 o ambiente virtual, execute `deactivate` para sair dele.
 
@@ -212,6 +217,24 @@ monitoramento existe somente dentro deste processo: executar vários workers cri
 um monitor por processo. Não há Redis, Celery, APScheduler, alertas ou coordenação
 distribuída nesta etapa.
 
+## Interface web (Etapa 7)
+
+O dashboard em `GET /` lista os endpoints e mostra o resultado mais recente de
+cada um. Ele também permite cadastrar endpoints e iniciar uma verificação manual.
+A página `GET /ui/endpoints/{endpoint_id}` apresenta os 25 resultados mais recentes,
+do mais novo para o mais antigo, além de formulários para editar ou excluir o
+endpoint.
+
+Todas as ações que alteram dados ou executam verificações usam `POST` e reutilizam
+o modelo e as funções já usados pela API JSON. As páginas `GET` consultam somente
+dados persistidos e não fazem requisições aos endpoints monitorados. Os templates
+ficam em `templates/` e o CSS responsivo local em `static/styles.css`; não há
+framework frontend nem dependências externas carregadas pelo navegador.
+
+O monitor automático de 60 segundos continua sendo uma tarefa in-process adequada
+ao uso local com um único processo. A interface não adiciona autenticação, alertas
+ou recursos de deployment.
+
 ## Testes automatizados
 
 Na pasta `api-sentinel-starter`, com as dependências instaladas, execute:
@@ -240,9 +263,11 @@ Os testes de monitoramento controlam diretamente os ciclos, sem esperar os 60
 segundos reais. Nas demais suítes, uma configuração interna desativa a tarefa para
 evitar verificações automáticas inesperadas. Também são cobertos início e parada,
 persistência, múltiplos endpoints, isolamento de falhas e recarga da lista.
+Os testes da interface cobrem dashboard vazio e populado, resultado mais recente,
+formulários, validação, checagem manual, histórico, escaping de HTML e preservação
+das respostas JSON. Eles usam o mesmo SQLite temporário e bloqueio de rede.
 
 ## Próximas etapas
 
 O [ROADMAP.md](ROADMAP.md) acompanha as funcionalidades existentes e planejadas:
-interface web, alertas e ampliação dos testes automatizados para essas
-funcionalidades.
+alertas, autenticação, deployment e a entrega final do projeto.

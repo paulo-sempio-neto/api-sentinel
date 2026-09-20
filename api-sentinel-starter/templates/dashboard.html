@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · API Sentinel{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Visão geral</p>
+        <h1>Seus endpoints em um só lugar</h1>
+        <p>Acompanhe o último resultado, execute verificações manuais e consulte o histórico.</p>
+    </div>
+    <div class="metric" aria-label="Quantidade de endpoints">
+        <strong>{{ endpoints | length }}</strong>
+        <span>{{ "endpoint" if endpoints | length == 1 else "endpoints" }}</span>
+    </div>
+</section>
+
+<section class="panel create-panel" aria-labelledby="create-title">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Novo monitor</p>
+            <h2 id="create-title">Cadastrar endpoint</h2>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form class="endpoint-form" method="post" action="{{ url_for('ui_create_endpoint') }}">
+        <label>
+            Nome
+            <input name="name" value="{{ form_values.name }}" placeholder="API principal" required>
+        </label>
+        <label>
+            URL HTTP/HTTPS
+            <input name="url" type="url" value="{{ form_values.url }}" placeholder="https://example.com/health" required>
+        </label>
+        <button class="button button-primary" type="submit">Adicionar endpoint</button>
+    </form>
+</section>
+
+<section aria-labelledby="endpoints-title">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Monitoramento</p>
+            <h2 id="endpoints-title">Endpoints cadastrados</h2>
+        </div>
+        <span class="refresh-note">Atualização automática a cada 60 segundos</span>
+    </div>
+
+    {% if endpoints %}
+    <div class="endpoint-grid">
+        {% for endpoint in endpoints %}
+        <article class="endpoint-card">
+            <div class="card-heading">
+                <div>
+                    <h3><a href="{{ url_for('ui_endpoint_detail', endpoint_id=endpoint.id) }}">{{ endpoint.name }}</a></h3>
+                    <a class="endpoint-url" href="{{ endpoint.url }}" target="_blank" rel="noopener noreferrer">{{ endpoint.url }}</a>
+                </div>
+                {% if endpoint.latest %}
+                <span class="status-badge {{ 'status-success' if endpoint.latest.success else 'status-failure' }}">
+                    {{ "Online" if endpoint.latest.success else "Falha" }}
+                </span>
+                {% else %}
+                <span class="status-badge status-unknown">Sem dados</span>
+                {% endif %}
+            </div>
+
+            {% if endpoint.latest %}
+            <dl class="result-grid">
+                <div>
+                    <dt>HTTP</dt>
+                    <dd>{{ endpoint.latest.status_code if endpoint.latest.status_code is not none else "—" }}</dd>
+                </div>
+                <div>
+                    <dt>Resposta</dt>
+                    <dd>{{ "%.1f ms" | format(endpoint.latest.response_time_ms) if endpoint.latest.response_time_ms is not none else "—" }}</dd>
+                </div>
+                <div class="result-time">
+                    <dt>Última verificação</dt>
+                    <dd>{{ endpoint.latest.checked_at }}</dd>
+                </div>
+            </dl>
+            {% if endpoint.latest.error_message %}
+            <p class="error-message">{{ endpoint.latest.error_message }}</p>
+            {% endif %}
+            {% else %}
+            <p class="empty-state compact">Este endpoint ainda não possui verificações.</p>
+            {% endif %}
+
+            <div class="card-actions">
+                <a class="button button-secondary" href="{{ url_for('ui_endpoint_detail', endpoint_id=endpoint.id) }}">Ver histórico</a>
+                <form method="post" action="{{ url_for('ui_check_endpoint', endpoint_id=endpoint.id) }}">
+                    <button class="button button-primary" type="submit">Verificar agora</button>
+                </form>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="panel empty-state">
+        <strong>Nenhum endpoint cadastrado.</strong>
+        <span>Use o formulário acima para adicionar o primeiro monitor.</span>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

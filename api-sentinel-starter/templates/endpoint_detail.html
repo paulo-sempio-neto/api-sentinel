@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}{{ endpoint.name }} · API Sentinel{% endblock %}
+
+{% block content %}
+<a class="back-link" href="{{ url_for('dashboard') }}">← Voltar ao dashboard</a>
+
+<section class="detail-header">
+    <div>
+        <p class="eyebrow">Endpoint #{{ endpoint.id }}</p>
+        <h1>{{ endpoint.name }}</h1>
+        <a class="endpoint-url" href="{{ endpoint.url }}" target="_blank" rel="noopener noreferrer">{{ endpoint.url }}</a>
+    </div>
+    <form method="post" action="{{ url_for('ui_check_endpoint', endpoint_id=endpoint.id) }}">
+        <button class="button button-primary" type="submit">Verificar agora</button>
+    </form>
+</section>
+
+{% if error %}
+<div class="alert alert-error" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="detail-layout">
+    <section class="panel" aria-labelledby="history-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Resultados recentes</p>
+                <h2 id="history-title">Histórico</h2>
+            </div>
+            <span class="refresh-note">Últimos {{ history_limit }}</span>
+        </div>
+
+        {% if history %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Resultado</th>
+                        <th>HTTP</th>
+                        <th>Tempo</th>
+                        <th>Horário UTC</th>
+                        <th>Erro</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for check in history %}
+                    <tr>
+                        <td><span class="status-badge {{ 'status-success' if check.success else 'status-failure' }}">{{ "Sucesso" if check.success else "Falha" }}</span></td>
+                        <td>{{ check.status_code if check.status_code is not none else "—" }}</td>
+                        <td>{{ "%.1f ms" | format(check.response_time_ms) if check.response_time_ms is not none else "—" }}</td>
+                        <td><time datetime="{{ check.checked_at }}">{{ check.checked_at }}</time></td>
+                        <td>{{ check.error_message or "—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state compact">Nenhuma verificação registrada para este endpoint.</div>
+        {% endif %}
+    </section>
+
+    <aside class="panel management-panel" aria-labelledby="edit-title">
+        <p class="eyebrow">Configuração</p>
+        <h2 id="edit-title">Editar endpoint</h2>
+        <form class="stacked-form" method="post" action="{{ url_for('ui_update_endpoint', endpoint_id=endpoint.id) }}">
+            <label>
+                Nome
+                <input name="name" value="{{ form_values.name }}" required>
+            </label>
+            <label>
+                URL HTTP/HTTPS
+                <input name="url" type="url" value="{{ form_values.url }}" required>
+            </label>
+            <button class="button button-secondary" type="submit">Salvar alterações</button>
+        </form>
+
+        <div class="danger-zone">
+            <h3>Excluir endpoint</h3>
+            <p>O histórico associado também será removido.</p>
+            <form method="post" action="{{ url_for('ui_delete_endpoint', endpoint_id=endpoint.id) }}">
+                <button class="button button-danger" type="submit">Excluir endpoint</button>
+            </form>
+        </div>
+    </aside>
+</div>
+{% endblock %}

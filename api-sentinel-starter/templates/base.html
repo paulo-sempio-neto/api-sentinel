@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="API Sentinel — monitoramento simples de endpoints HTTP">
+    <title>{% block title %}API Sentinel{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <div class="page-shell header-content">
+            <a class="brand" href="{{ url_for('dashboard') }}" aria-label="API Sentinel — início">
+                <span class="brand-mark" aria-hidden="true">S</span>
+                <span>
+                    <strong>API Sentinel</strong>
+                    <small>Endpoint monitor</small>
+                </span>
+            </a>
+            <nav aria-label="Navegação principal">
+                <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a href="/docs">API Docs</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="page-shell site-footer">
+        Monitoramento local, simples e transparente.
+    </footer>
+</body>
+</html>
