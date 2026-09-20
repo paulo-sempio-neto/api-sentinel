@@ -1,273 +1,338 @@
 # API Sentinel
 
-Projeto de portfólio e projeto final do CS50x para monitorar endpoints HTTP.
-Nesta etapa, a aplicação oferece uma API para cadastrar, listar, editar e excluir URLs,
-com persistência em SQLite e verificações HTTP manuais que gravam e retornam seus
-resultados, consulta do histórico pela API e monitoramento automático enquanto a
-aplicação está em execução. Uma interface web server-rendered permite usar essas
-funções pelo navegador. Alertas, autenticação e deployment ainda não estão implementados.
+API Sentinel é uma aplicação web para cadastrar endpoints HTTP, verificar sua
+disponibilidade, preservar o histórico das tentativas e acompanhar os resultados
+por uma interface simples ou por uma API JSON.
 
-## Funcionalidades atuais
+O projeto resolve um problema comum de observabilidade em pequena escala: saber se
+uma URL está respondendo, quanto tempo levou e o que aconteceu nas tentativas
+anteriores. Mais do que um CRUD, ele reúne persistência relacional, chamadas HTTP,
+tratamento de falhas de rede, tarefas assíncronas, ciclo de vida do FastAPI,
+templates server-rendered e testes isolados da internet.
 
-| Método e rota | Função |
-| --- | --- |
-| `GET /` | Abre o dashboard no navegador |
-| `GET /health` | Confirma que o API Sentinel está executando |
-| `GET /about` | Exibe informações do projeto |
-| `POST /endpoints` | Cadastra nome e URL HTTP/HTTPS |
-| `GET /endpoints` | Lista os endpoints cadastrados |
-| `PUT /endpoints/{endpoint_id}` | Atualiza nome e URL de um endpoint |
-| `DELETE /endpoints/{endpoint_id}` | Exclui um endpoint |
-| `POST /endpoints/{endpoint_id}/check` | Executa uma verificação HTTP e retorna o resultado salvo |
-| `GET /endpoints/{endpoint_id}/checks` | Consulta o histórico salvo, com limite de resultados |
-| `GET /ui/endpoints/{endpoint_id}` | Exibe detalhes e histórico recente na interface |
-| `GET /docs` | Abre a documentação interativa da API |
+Este repositório representa um **MVP local e single-process**. O monitor automático
+em memória foi escolhido intencionalmente para manter a arquitetura compreensível
+e adequada ao escopo atual; a aplicação não é apresentada como production-ready.
 
-O nome tem os espaços das extremidades removidos e não pode ficar vazio.
-Dados inválidos retornam `422`, URLs duplicadas retornam `409` e atualizar ou
-excluir um endpoint inexistente retorna `404`. A rota `/health` verifica o API Sentinel,
-não as URLs cadastradas.
+## Funcionalidades
 
-Para editar, envie os dois campos (`name` e `url`) no corpo JSON do `PUT`.
-As validações são as mesmas do cadastro. É permitido manter a própria URL;
-usar a URL de outro endpoint retorna `409` e preserva os dados anteriores.
+- Cadastro, listagem, edição e exclusão de endpoints HTTP/HTTPS.
+- Validação de nome, URL e duplicidade.
+- Checagem manual pela API ou pelo navegador.
+- Monitoramento automático a cada 60 segundos enquanto a aplicação está ativa.
+- Persistência de sucesso, código HTTP, duração, horário UTC e mensagem de erro.
+- Histórico newest-first, isolado por endpoint e com limites aplicados no SQLite.
+- Dashboard responsivo com o último resultado conhecido.
+- Página de detalhes com os 25 resultados mais recentes.
+- API JSON com documentação OpenAPI interativa.
+- Suíte offline com SQLite temporário, HTTP simulado e controle determinístico do
+  monitor automático.
 
-```json
-{"name":"Minha API atualizada","url":"https://example.com/api"}
+## Arquitetura e fluxo de dados
+
+A aplicação mantém uma arquitetura direta: [app.py](app.py) contém o FastAPI, as
+rotas, o monitor e a integração com os templates; [database.py](database.py)
+concentra a conexão SQLite e a persistência do histórico.
+
+### Checagem manual
+
+```text
+UI ou API
+  -> perform_endpoint_check(endpoint_id)
+  -> HTTPX faz um GET
+  -> save_check_result(...)
+  -> SQLite
+  -> resultado retornado ou exibido
 ```
 
-## Ambiente e dependências
+### Monitoramento automático
 
-O ambiente virtual escolhido é **`api-sentinel-starter\.venv`**. Todos os comandos
-abaixo usam esse ambiente. O `.venv` da pasta superior não faz parte deste fluxo
-e não precisa ser ativado nem excluído.
+```text
+FastAPI lifespan
+  -> uma tarefa de monitoramento
+  -> espera 60 segundos
+  -> carrega novamente os IDs cadastrados
+  -> asyncio.to_thread(...)
+  -> perform_endpoint_check(endpoint_id)
+  -> histórico no SQLite
+```
 
-Esta etapa foi validada com Python 3.14.3 no Windows. Instale o Python 3.14 com o
-comando `py` disponível antes de seguir as instruções.
+O trabalho síncrono de SQLite e HTTPX é deslocado para threads para não bloquear o
+event loop. A lista de endpoints é recarregada em cada ciclo: cadastros novos entram
+no ciclo seguinte e endpoints excluídos deixam de ser verificados. Uma falha
+inesperada em um endpoint é registrada no log e não interrompe os demais.
 
-As dependências diretas estão em `requirements.txt`: FastAPI, Uvicorn, Pydantic,
-HTTPX e Jinja2. A aplicação usa HTTPX para executar as verificações manuais e
-automáticas e Jinja2 para renderizar HTML com escaping automático.
-SQLite e os demais módulos da biblioteca padrão vêm com o Python. As dependências
-de testes também estão no arquivo: pytest e HTTPX2, usado pelo `TestClient` da
-versão atual do Starlette (base do FastAPI).
+### Consulta de histórico
 
-## Instalação no Windows (PowerShell)
+```text
+UI ou API
+  -> get_check_history(endpoint_id, limit=...)
+  -> consulta SQLite ordenada por checked_at DESC, id DESC
+  -> HTML server-rendered ou JSON
+```
 
-Abra um novo terminal PowerShell e entre na pasta que contém `app.py`.
-Neste checkout, o caminho é o seguinte; ajuste-o se o projeto estiver em outro local:
+As páginas GET apenas leem dados persistidos. Checagens e alterações exigem POST,
+PUT ou DELETE, conforme a rota.
+
+## Tecnologias
+
+| Tecnologia | Uso no projeto |
+| --- | --- |
+| Python 3.14 | Linguagem e biblioteca padrão (`asyncio`, `sqlite3`, `time`) |
+| FastAPI | API, validação de rotas e ciclo de vida |
+| Uvicorn | Servidor ASGI local |
+| Pydantic | Validação de nomes e URLs HTTP/HTTPS |
+| HTTPX | Requisições aos endpoints monitorados |
+| SQLite | Endpoints e histórico persistente |
+| Jinja2 | Templates HTML com escaping automático |
+| HTML/CSS | Interface responsiva sem framework frontend |
+| pytest | Testes automatizados |
+
+As versões exatas e validadas estão em [requirements.txt](requirements.txt).
+
+## Estrutura do projeto
+
+```text
+api-sentinel-starter/
+├── app.py                    # FastAPI, monitor, API JSON e rotas da UI
+├── database.py               # Conexão, schema e persistência SQLite
+├── requirements.txt          # Dependências diretas fixadas
+├── pytest.ini                # Descoberta e importação dos testes
+├── templates/
+│   ├── base.html             # Layout e navegação compartilhados
+│   ├── dashboard.html        # Lista e último estado dos endpoints
+│   ├── endpoint_detail.html  # Histórico e gerenciamento
+│   └── not_found.html        # 404 específico da interface
+├── static/
+│   └── styles.css            # Estilos locais e responsivos
+├── tests/
+│   ├── conftest.py           # Banco temporário e bloqueio de rede real
+│   ├── test_endpoints.py     # Gerenciamento de endpoints
+│   ├── test_check_history.py # Persistência e integridade do histórico
+│   ├── test_manual_checks.py # HTTP manual e falhas de rede
+│   ├── test_history_api.py   # API de histórico e limites
+│   ├── test_monitoring.py    # Ciclo de vida e monitor automático
+│   ├── test_ui.py            # Dashboard, formulários e escaping
+│   └── test_smoke.py         # Health check e CSS local
+├── .gitignore                # Artefatos locais e dados sensíveis
+└── ROADMAP.md                # MVP concluído e ideias futuras
+```
+
+Arquivos gerados, como `.venv`, `api_sentinel.db`, caches e bytecode, não fazem
+parte do repositório.
+
+## Como uma checagem funciona
+
+O modelo atual monitora endpoints com um único método: `GET`.
+
+1. A URL atual é lida do SQLite.
+2. O horário inicial é registrado em UTC.
+3. `httpx.get(...)` executa uma única tentativa com verificação TLS ativa.
+4. Redirecionamentos não são seguidos e não há retries.
+5. `time.perf_counter()` mede a duração em milissegundos.
+6. Respostas `2xx` são sucesso; `3xx`, `4xx` e `5xx` são falha.
+7. Timeout, conexão e outros `httpx.RequestError` viram resultados persistidos,
+   sem expor o traceback ao usuário.
+
+`CHECK_TIMEOUT_SECONDS = 10.0` é aplicado às operações do HTTPX. Ele não representa
+um limite total rígido de dez segundos para toda a tentativa. Proxies configurados
+no ambiente não são herdados (`trust_env=False`).
+
+## Persistência
+
+O banco fica em `api-sentinel-starter/api_sentinel.db`, independentemente do
+diretório de onde o comando é executado. Ele é criado pelo lifespan do FastAPI e é
+ignorado pelo Git.
+
+### `endpoints`
+
+- `id`: chave primária.
+- `name`: nome obrigatório.
+- `url`: URL obrigatória e única.
+- `created_at`: horário de criação fornecido pelo SQLite.
+
+### `checks`
+
+- `id`: chave primária.
+- `endpoint_id`: chave estrangeira obrigatória.
+- `checked_at`: timestamp ISO 8601 normalizado para UTC.
+- `success`: inteiro restrito a `0` ou `1`.
+- `status_code`: nullable quando não houve resposta HTTP.
+- `response_time_ms`: nullable e nunca negativo quando presente.
+- `error_message`: nullable.
+
+Chaves estrangeiras são habilitadas em cada conexão. Excluir um endpoint remove
+seu histórico com `ON DELETE CASCADE`. O índice
+`(endpoint_id, checked_at DESC, id DESC)` atende às consultas newest-first e torna
+a ordem determinística quando dois resultados têm o mesmo timestamp.
+
+## Interface web
+
+Com o servidor ativo, abra <http://127.0.0.1:8000/>.
+
+No dashboard é possível:
+
+- cadastrar um endpoint;
+- consultar o último resultado conhecido;
+- iniciar uma checagem manual;
+- abrir o histórico recente.
+
+Na página de detalhes também é possível editar ou excluir o endpoint. Todas as
+ações mutáveis usam formulários POST. Os templates usam escaping automático do
+Jinja2, e o CSS é servido localmente — não há JavaScript, CDN ou framework de
+frontend.
+
+## Instalação no Windows
+
+Os comandos abaixo foram validados no Windows com Python 3.14.3 e devem ser
+executados na pasta que contém `app.py`:
 
 ```powershell
-cd "C:\Users\USER\Downloads\API-Sentinel-Begin\api-sentinel-starter"
+cd api-sentinel/api-sentinel-starter
 ```
 
-Crie o ambiente virtual na primeira instalação. Se `.venv` já existir nesta pasta,
-reutilize-o e siga para a ativação:
+Crie o ambiente virtual local do projeto:
 
 ```powershell
 py -3.14 -m venv .venv
 ```
 
-Ative o ambiente:
+Ative-o:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Se o PowerShell bloquear o script de ativação, continue com os comandos abaixo:
-eles usam diretamente o Python do ambiente escolhido e dispensam a ativação.
+Se a política do PowerShell impedir a ativação, os próximos comandos continuam
+funcionando porque chamam diretamente o Python do `.venv`.
 
-Instale as dependências e confira se são compatíveis:
+Instale e valide as dependências:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-## Executar e verificar a API
-
-Na mesma pasta, inicie o servidor de desenvolvimento:
+Inicie a aplicação:
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Mantenha esse terminal aberto. Em outro terminal PowerShell, verifique a aplicação:
+Abra:
+
+- Dashboard: <http://127.0.0.1:8000/>
+- OpenAPI/Swagger UI: <http://127.0.0.1:8000/docs>
+- Health check: <http://127.0.0.1:8000/health>
+
+Encerre o servidor com `Ctrl+C`. Se o ambiente estiver ativado, use `deactivate`
+para sair dele.
+
+Em macOS/Linux, os equivalentes usuais são `python3 -m venv .venv`,
+`source .venv/bin/activate` e `python -m uvicorn app:app`; a estrutura e o entry
+point continuam os mesmos.
+
+## API JSON
+
+O resumo abaixo complementa a documentação interativa em `/docs`.
+
+| Método | Caminho | Finalidade |
+| --- | --- | --- |
+| `GET` | `/health` | Confirma que o API Sentinel está ativo |
+| `GET` | `/about` | Retorna informações básicas do projeto |
+| `POST` | `/endpoints` | Cadastra nome e URL |
+| `GET` | `/endpoints` | Lista os endpoints |
+| `PUT` | `/endpoints/{endpoint_id}` | Atualiza nome e URL |
+| `DELETE` | `/endpoints/{endpoint_id}` | Exclui endpoint e histórico associado |
+| `POST` | `/endpoints/{endpoint_id}/check` | Executa e persiste uma checagem manual |
+| `GET` | `/endpoints/{endpoint_id}/checks` | Retorna histórico newest-first |
+
+O parâmetro `limit` da rota de histórico tem padrão `50`, mínimo `1` e máximo
+`100`. Endpoint inexistente retorna `404`, URL duplicada retorna `409` e dados
+inválidos retornam `422`.
+
+Exemplo de cadastro no PowerShell:
 
 ```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
+$body = @{ name = "Minha API"; url = "https://example.com/health" } |
+    ConvertTo-Json
+Invoke-RestMethod -Method Post `
+    -Uri "http://127.0.0.1:8000/endpoints" `
+    -ContentType "application/json" `
+    -Body $body
 ```
 
-A resposta deve ter os valores abaixo, com status HTTP `200`:
-
-```json
-{"status":"ok","service":"api-sentinel"}
-```
-
-Abra <http://127.0.0.1:8000/docs> no navegador para experimentar as rotas.
-Abra <http://127.0.0.1:8000/> para usar o dashboard.
-Use `Ctrl+C` no terminal do servidor para encerrar a aplicação. Se tiver ativado
-o ambiente virtual, execute `deactivate` para sair dele.
-
-Enquanto o processo estiver ativo, uma tarefa interna verifica os endpoints
-cadastrados a cada 60 segundos. Essa solução é intencionalmente simples e adequada
-ao servidor local executado em um único processo; não é um agendador distribuído.
-
-## Banco de dados
-
-O arquivo é sempre `api-sentinel-starter/api_sentinel.db`, ao lado de
-`database.py`, independentemente da pasta a partir da qual o Python é executado.
-A inicialização ocorre no ciclo de vida do FastAPI (`lifespan`), quando o servidor
-inicia. Importar o módulo não cria o banco.
-
-As tabelas são criadas somente se ainda não existirem; os cadastros existentes são
-preservados. O banco local é ignorado pelo Git.
-
-### Persistência do histórico (Etapa 3)
-
-A tabela `checks` armazena `id`, `endpoint_id`, `checked_at` (texto ISO 8601 em UTC),
-`success` (0 ou 1), `status_code`, `response_time_ms` e `error_message`. Os três
-últimos campos aceitam `NULL`; a duração, quando informada, não pode ser negativa.
-
-As funções internas de `database.py` recebem resultados já calculados:
-
-- `save_check_result(endpoint_id, success, *, status_code=None, response_time_ms=None, error_message=None, checked_at=None)` grava o resultado e retorna seu ID. `checked_at` aceita um `datetime` com fuso horário; se omitido, usa o instante atual em UTC.
-- `get_check_history(endpoint_id, limit=None)` retorna uma lista de dicionários, com `success` convertido para booleano. Ordena por horário decrescente e, em caso de empate, por ID decrescente. Retorna `[]` se não houver histórico ou se o endpoint não existir. O padrão continua sem limite; um limite positivo opcional é aplicado diretamente no SQLite.
-
-Chaves estrangeiras são ativadas em cada conexão. Gravar um resultado para um
-endpoint inexistente gera `sqlite3.IntegrityError`. Excluir um endpoint também
-exclui seu histórico (`ON DELETE CASCADE`); editar o endpoint preserva seus
-resultados, vinculados ao ID. O histórico não guarda uma cópia da URL antiga.
-Essas funções de persistência não executam requisições HTTP.
-
-## Verificação manual (Etapa 4)
-
-Com a API em execução e um endpoint cadastrado, use a documentação `/docs` ou
-execute o comando abaixo, substituindo `1` pelo ID desejado:
+Exemplo de checagem manual:
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/endpoints/1/check"
+Invoke-RestMethod -Method Post `
+    -Uri "http://127.0.0.1:8000/endpoints/1/check"
 ```
 
-A função `perform_endpoint_check(endpoint_id)` busca a URL atual, executa um único
-GET com `httpx`, grava o resultado por `save_check_result(...)` e devolve o registro
-criado. O modelo não armazena método HTTP ou status esperado: nesta etapa, apenas
-respostas **2xx** representam sucesso. Respostas 3xx, 4xx e 5xx são falhas, com o
-código HTTP preservado e `error_message` nulo. Redirecionamentos não são seguidos.
+## Testes
 
-O timeout é definido uma vez, em `CHECK_TIMEOUT_SECONDS = 10.0`, em `app.py`.
-Ele limita cada operação de conexão/leitura/escrita/espera por conexão do HTTPX;
-não representa um limite total de 10 segundos para toda a checagem. A duração é
-medida com `time.perf_counter()` e salva em milissegundos, incluindo o tempo até
-uma falha. O horário UTC registrado é o início da tentativa. O corpo da resposta
-é recebido pelo HTTPX, mas não é armazenado nem retornado pela API Sentinel.
-
-Timeouts, falhas de conexão/DNS/TLS e outros `httpx.RequestError` são registrados
-com `success=false`, `status_code=null` e uma mensagem curta, sem traceback ou
-detalhes internos. A rota retorna HTTP `200` com o resultado, mesmo se o serviço
-monitorado estiver indisponível. Um ID inexistente retorna `404`, sem requisição
-externa e sem criar histórico.
-
-A resposta contém `id`, `endpoint_id`, `checked_at`, `success`, `status_code`,
-`response_time_ms` e `error_message`, com os mesmos valores persistidos. Cada
-chamada cria exatamente um resultado. Não há retries; a verificação de
-certificados TLS continua ativa, e configurações de proxy do ambiente não são
-herdadas (`trust_env=False`). A rota manual continua disponível mesmo com o
-monitoramento automático ativo.
-
-## Consulta do histórico (Etapa 5)
-
-Para consultar os resultados já armazenados de um endpoint:
+Não é necessário iniciar o Uvicorn. Execute no diretório do projeto:
 
 ```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/endpoints/1/checks?limit=10"
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider
 ```
 
-A rota `GET /endpoints/{endpoint_id}/checks` retorna uma lista JSON com os mesmos
-campos da resposta da checagem manual: `id`, `endpoint_id`, `checked_at`, `success`,
-`status_code`, `response_time_ms` e `error_message`. Os resultados são ordenados
-do horário mais recente ao mais antigo; empates são resolvidos pelo maior ID.
+Cada teste que usa persistência recebe um banco SQLite temporário. Um bloqueio global impede transporte
+HTTP real, e respostas/falhas são simuladas com recursos do HTTPX e do pytest. O
+monitor automático fica desativado nas suítes não relacionadas e usa ciclos
+controlados nos testes próprios, sem esperas de 60 segundos.
 
-O parâmetro `limit` é opcional: padrão **50**, mínimo **1**, máximo **100**.
-O limite é aplicado na consulta SQLite, antes de carregar os resultados.
-Valores inválidos retornam a validação padrão `422` do FastAPI.
+A cobertura funcional inclui:
 
-Um endpoint existente sem verificações retorna `200` e `[]`; um ID inexistente
-retorna `404`. A consulta só lê os registros daquele endpoint: não executa HTTP,
-não cria verificações e não oferece paginação por cursor ou offset. Monitoramento
-automático não altera esse comportamento de leitura.
+- regras de cadastro, duplicidade, edição, exclusão e `404`;
+- constraints, foreign keys, cascade e ordenação do histórico;
+- sucesso HTTP, respostas não-2xx, timeout e erros de conexão;
+- limites e ausência de efeitos colaterais na leitura do histórico;
+- início, isolamento de falhas e shutdown do monitor;
+- dashboard, formulários, escaping HTML e compatibilidade da API JSON;
+- smoke checks do health endpoint e do CSS local.
 
-## Monitoramento automático (Etapa 6)
+## Decisões de projeto
 
-O lifespan do FastAPI inicia uma única tarefa de monitoramento junto com a
-aplicação. Após cada intervalo de `MONITOR_INTERVAL_SECONDS = 60.0`, ela consulta
-novamente os IDs atualmente cadastrados e executa `perform_endpoint_check(...)`
-para cada um. Assim, verificações manuais e automáticas compartilham as mesmas
-regras HTTP e o mesmo caminho de persistência.
+- **SQLite sem ORM:** mantém o schema e as consultas explícitos para o tamanho do
+  projeto.
+- **Scheduler in-process:** suficiente para o MVP single-process, sem Redis,
+  Celery ou outro serviço operacional.
+- **Uma implementação de checagem:** API, UI e monitor reutilizam
+  `perform_endpoint_check(...)`.
+- **Thread offload:** preserva a responsividade do event loop sem reescrever a
+  camada HTTP síncrona.
+- **Server-side rendering:** oferece uma demonstração utilizável sem Node ou uma
+  aplicação frontend separada.
+- **GET sem efeitos colaterais:** páginas e histórico apenas leem; checagens e
+  mudanças usam métodos mutáveis.
+- **Testes offline:** tornam a suíte determinística e segura para execução local.
 
-Como o HTTPX usado pelo projeto é síncrono, tanto a leitura da lista quanto cada
-checagem são deslocadas para threads com `asyncio.to_thread(...)`, sem bloquear o
-event loop. Falhas normais de rede viram resultados persistidos; uma exceção
-inesperada em um endpoint é registrada no log e não impede os demais nem os ciclos
-seguintes. A lista é recarregada em todo ciclo, portanto endpoints novos entram no
-próximo ciclo e endpoints removidos deixam de participar.
+## Limitações atuais
 
-No encerramento, o lifespan sinaliza a tarefa e aguarda sua finalização. O
-monitoramento existe somente dentro deste processo: executar vários workers criaria
-um monitor por processo. Não há Redis, Celery, APScheduler, alertas ou coordenação
-distribuída nesta etapa.
+Estas limitações são deliberadas no MVP e devem ser tratadas antes de uma eventual
+exposição pública:
 
-## Interface web (Etapa 7)
+- não há autenticação, autorização nem separação entre usuários;
+- a UI é orientada a uso local por uma única pessoa;
+- formulários não possuem proteção CSRF;
+- URLs fornecidas pelo usuário aceitam HTTP/HTTPS, mas ainda não possuem proteção
+  completa contra SSRF ou acesso a redes internas;
+- SQLite é adequado ao uso local, mas não substitui um banco multiusuário;
+- não há framework de migrations;
+- o scheduler vive dentro de um único processo; múltiplos workers criariam tarefas
+  duplicadas e não há coordenação distribuída;
+- checagens automáticas são sequenciais por ciclo;
+- não há alertas, notificações, rate limiting ou métricas agregadas de uptime;
+- não há configuração de Docker, CI/CD, proxy reverso, TLS do servidor ou
+  deployment.
 
-O dashboard em `GET /` lista os endpoints e mostra o resultado mais recente de
-cada um. Ele também permite cadastrar endpoints e iniciar uma verificação manual.
-A página `GET /ui/endpoints/{endpoint_id}` apresenta os 25 resultados mais recentes,
-do mais novo para o mais antigo, além de formulários para editar ou excluir o
-endpoint.
+## Próximos passos possíveis
 
-Todas as ações que alteram dados ou executam verificações usam `POST` e reutilizam
-o modelo e as funções já usados pela API JSON. As páginas `GET` consultam somente
-dados persistidos e não fazem requisições aos endpoints monitorados. Os templates
-ficam em `templates/` e o CSS responsivo local em `static/styles.css`; não há
-framework frontend nem dependências externas carregadas pelo navegador.
+Uma fase futura de production readiness pode avaliar PostgreSQL, migrations,
+Docker, CI, autenticação, proteção CSRF e SSRF, rate limiting, alertas, deployment
+e processamento distribuído caso a escala realmente exija. Esses recursos não
+fazem parte do MVP atual.
 
-O monitor automático de 60 segundos continua sendo uma tarefa in-process adequada
-ao uso local com um único processo. A interface não adiciona autenticação, alertas
-ou recursos de deployment.
-
-## Testes automatizados
-
-Na pasta `api-sentinel-starter`, com as dependências instaladas, execute:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-Não é necessário iniciar o Uvicorn. Cada teste usa um SQLite temporário separado,
-inicializado pelo ciclo de vida da aplicação. O banco `api_sentinel.db` do projeto
-não é usado nem alterado, e nenhuma URL cadastrada é acessada pela rede.
-
-A suíte cobre cadastro, listagem, nomes vazios ou com espaços, URLs duplicadas,
-edição, exclusão e respostas `404` para endpoints inexistentes. Também verifica
-que uma edição com URL duplicada não altera os dados e que manter a própria URL
-é permitido. Os testes de persistência cobrem sucessos, falhas com campos nulos,
-ordenação, isolamento entre endpoints, integridade referencial, exclusão em cascata
-e inicialização sobre um banco existente sem perda de dados.
-Os testes de checagem manual usam `httpx.MockTransport` para simular respostas e
-exceções, com um relógio controlado para conferir a duração. O transporte HTTPX
-real é bloqueado durante os testes; nenhuma URL é acessada pela internet.
-Os testes da API de histórico cobrem formato, ordenação, isolamento, limites,
-validação e leitura sem efeitos colaterais, além da compatibilidade com a
-checagem manual e com o comportamento anterior da função de persistência.
-Os testes de monitoramento controlam diretamente os ciclos, sem esperar os 60
-segundos reais. Nas demais suítes, uma configuração interna desativa a tarefa para
-evitar verificações automáticas inesperadas. Também são cobertos início e parada,
-persistência, múltiplos endpoints, isolamento de falhas e recarga da lista.
-Os testes da interface cobrem dashboard vazio e populado, resultado mais recente,
-formulários, validação, checagem manual, histórico, escaping de HTML e preservação
-das respostas JSON. Eles usam o mesmo SQLite temporário e bloqueio de rede.
-
-## Próximas etapas
-
-O [ROADMAP.md](ROADMAP.md) acompanha as funcionalidades existentes e planejadas:
-alertas, autenticação, deployment e a entrega final do projeto.
+O histórico detalhado das etapas está em [ROADMAP.md](ROADMAP.md).

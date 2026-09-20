@@ -1,62 +1,93 @@
 # API Sentinel Roadmap
 
-## Phase 1 — Project setup
+Este documento separa o MVP concluído de possíveis trabalhos futuros. Itens da
+seção de production readiness são ideias, não funcionalidades atuais.
 
-- [x] Create the project structure
-- [x] Create the FastAPI application
-- [x] Add the health check endpoint
-- [x] Choose the project-local virtual environment (`api-sentinel-starter/.venv`)
-- [x] Declare and install all direct dependencies
-- [x] Use a database path relative to the project files
-- [x] Initialize the database through the FastAPI lifespan
-- [x] Document Windows setup, activation, installation, and execution
-- [x] Run the API locally and verify `/health`
+## MVP concluído
 
-## Phase 2 — Endpoint management
+### Stage 1 — Base de execução
 
-- [x] Create an SQLite database
-- [x] Add an endpoint to monitor
-- [x] Validate HTTP/HTTPS URLs and reject duplicate URLs
-- [x] Trim endpoint names and reject empty or whitespace-only names
-- [x] List registered endpoints
-- [x] Update an endpoint's name and URL
-- [x] Delete an endpoint
-- [x] Return 409 for duplicate URLs and 404 for missing endpoints on update/delete
-- [x] Add endpoint management tests using an isolated temporary SQLite database
+- [x] Criar a aplicação FastAPI e as rotas iniciais.
+- [x] Usar um único ambiente virtual local ao projeto.
+- [x] Fixar as dependências diretas.
+- [x] Usar um caminho SQLite relativo aos arquivos do projeto.
+- [x] Inicializar o banco pelo lifespan do FastAPI.
+- [x] Documentar instalação e execução no Windows.
 
-## Phase 3 — Monitoring
+### Stage 2 — Gerenciamento de endpoints
 
-- [x] Add persistent check storage with endpoint foreign keys
-- [x] Add internal functions to save results and retrieve newest-first history
-- [x] Test persistence, isolation, startup compatibility, and cascading deletion
-- [x] Perform manual endpoint checks (GET, 2xx success, finite timeout, no redirects/retries)
-- [x] Record HTTP status codes
-- [x] Measure response time
-- [x] Record connection errors
-- [x] Connect real HTTP checks to the persistence functions
-- [x] Test manual checks offline with mocked HTTP responses and network errors
-- [x] Expose read-only endpoint history through the API (newest first)
-- [x] Validate history limits (default 50, range 1-100) and apply them in SQLite
-- [x] Test history API isolation, limits, validation, and manual-check compatibility
+- [x] Cadastrar, listar, editar e excluir endpoints.
+- [x] Validar URLs HTTP/HTTPS e nomes após trim.
+- [x] Rejeitar URLs duplicadas com `409`.
+- [x] Retornar `404` para edição ou exclusão inexistente.
+- [x] Testar o gerenciamento com SQLite temporário.
 
-## Phase 4 — Final CS50 delivery
+### Stage 3 — Histórico persistente
 
-- [x] Add in-process automated checks while the program is running
-- [x] Reuse the manual-check path without blocking the async event loop
-- [x] Isolate endpoint failures and reload endpoints on every monitoring cycle
-- [x] Stop the monitoring task through the FastAPI lifespan
-- [x] Extend tests to cover monitoring, history, and scheduling
-- [x] Add a server-rendered dashboard and endpoint detail/history pages
-- [x] Add browser forms for endpoint creation, editing, deletion, and manual checks
-- [x] Test the UI without network access or changes to the JSON API
-- [x] Document current features and local setup in the README
-- [ ] Complete the README with final delivery instructions
-- [ ] Record the demonstration video
-- [ ] Submit the final project
+- [x] Criar a tabela `checks` com integridade referencial.
+- [x] Persistir sucesso, status HTTP, duração, horário e erro.
+- [x] Consultar histórico newest-first com desempate por ID.
+- [x] Excluir histórico em cascata com o endpoint.
+- [x] Testar constraints, isolamento e compatibilidade de inicialização.
 
-## Phase 5 — Portfolio improvements
+### Stage 4 — Checagem HTTP manual
 
-- [x] Build a simple responsive visual dashboard
-- [ ] Add user authentication
-- [ ] Add email or Discord alerts
-- [ ] Deploy the application online
+- [x] Executar GET com timeout finito, TLS ativo e sem retries/redirecionamentos.
+- [x] Classificar respostas `2xx` como sucesso.
+- [x] Converter falhas de rede em resultados persistidos.
+- [x] Expor `POST /endpoints/{endpoint_id}/check`.
+- [x] Testar o fluxo sem acessar a internet pública.
+
+### Stage 5 — API de histórico
+
+- [x] Expor `GET /endpoints/{endpoint_id}/checks`.
+- [x] Manter a leitura sem efeitos colaterais.
+- [x] Aplicar limite padrão 50 e faixa válida 1–100 no SQLite.
+- [x] Testar ordenação, isolamento, validação e compatibilidade manual.
+
+### Stage 6 — Monitoramento automático
+
+- [x] Criar uma tarefa in-process pelo lifespan.
+- [x] Verificar endpoints em ciclos de 60 segundos.
+- [x] Deslocar SQLite e HTTP síncronos com `asyncio.to_thread(...)`.
+- [x] Recarregar endpoints a cada ciclo e isolar falhas.
+- [x] Encerrar a tarefa de forma coordenada.
+- [x] Testar ciclos determinísticos sem esperar o intervalo real.
+
+### Stage 7 — Interface web
+
+- [x] Criar dashboard e detalhes com Jinja2.
+- [x] Exibir último resultado e histórico recente.
+- [x] Adicionar formulários de cadastro, edição, exclusão e checagem manual.
+- [x] Usar CSS local e responsivo sem framework frontend.
+- [x] Preservar as rotas e respostas da API JSON.
+- [x] Testar formulários, escaping e ausência de efeitos colaterais em GET.
+
+### Stage 8 — Fechamento do MVP
+
+- [x] Reorganizar o README para apresentação de portfólio.
+- [x] Documentar arquitetura, fluxos, stack, estrutura e decisões.
+- [x] Validar setup, comandos, dependências e entry point.
+- [x] Auditar `.gitignore`, arquivos rastreados e possíveis dados sensíveis.
+- [x] Revisar código, templates, CSS e cobertura de testes.
+- [x] Adicionar smoke tests para `/health` e o stylesheet local.
+- [x] Documentar limitações e separar o roadmap futuro.
+
+## Entrega do projeto
+
+- [ ] Gravar o vídeo de demonstração.
+- [ ] Realizar a submissão final do CS50.
+
+## Futuro — production readiness
+
+- [ ] Migrar para PostgreSQL se o uso multiusuário justificar.
+- [ ] Adotar migrations de banco de dados.
+- [ ] Adicionar autenticação, autorização e isolamento entre usuários.
+- [ ] Implementar proteção CSRF para formulários autenticados.
+- [ ] Endurecer requisições contra SSRF e acesso a redes internas.
+- [ ] Adicionar rate limiting e políticas operacionais de timeout.
+- [ ] Criar alertas por canais configuráveis.
+- [ ] Adicionar CI para testes e verificações automatizadas.
+- [ ] Avaliar Docker e configuração de deployment.
+- [ ] Adotar processamento distribuído somente se a escala exigir.
+- [ ] Documentar backup, observabilidade e operação em produção.
