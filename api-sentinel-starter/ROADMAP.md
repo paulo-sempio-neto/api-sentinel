@@ -35,7 +35,9 @@
 - [x] Record connection errors
 - [x] Connect real HTTP checks to the persistence functions
 - [x] Test manual checks offline with mocked HTTP responses and network errors
-- [ ] Expose endpoint history through the API
+- [x] Expose read-only endpoint history through the API (newest first)
+- [x] Validate history limits (default 50, range 1-100) and apply them in SQLite
+- [x] Test history API isolation, limits, validation, and manual-check compatibility
 
 ## Phase 4 — Final CS50 delivery
 

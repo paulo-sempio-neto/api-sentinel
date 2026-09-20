@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 import httpx
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Query, status
 from pydantic import BaseModel, HttpUrl, StringConstraints
 
-from database import get_connection, initialize_database, save_check_result
+from database import get_check_history, get_connection, initialize_database, save_check_result
 
 CHECK_TIMEOUT_SECONDS = 10.0
 
@@ -189,6 +189,29 @@ def perform_endpoint_check(endpoint_id: int) -> dict[str, int | float | str | bo
 def check_endpoint(endpoint_id: int) -> dict[str, int | float | str | bool | None]:
     """Returns a stored check result, including failures of the monitored service."""
     return perform_endpoint_check(endpoint_id)
+
+
+@app.get("/endpoints/{endpoint_id}/checks")
+def list_endpoint_checks(
+    endpoint_id: int,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> list[dict[str, int | float | str | bool | None]]:
+    """Reads persisted check history without executing a new check."""
+    connection = get_connection()
+    try:
+        endpoint = connection.execute(
+            "SELECT id FROM endpoints WHERE id = ?", (endpoint_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+
+    if endpoint is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Endpoint not found.",
+        )
+
+    return get_check_history(endpoint_id, limit=limit)
 
 
 @app.delete("/endpoints/{endpoint_id}")

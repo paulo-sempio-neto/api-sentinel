@@ -89,11 +89,16 @@ def save_check_result(
         connection.close()
 
 
-def get_check_history(endpoint_id: int) -> list[dict[str, int | float | str | bool | None]]:
+def get_check_history(
+    endpoint_id: int, limit: int | None = None
+) -> list[dict[str, int | float | str | bool | None]]:
     """Returns results newest first, breaking timestamp ties by descending ID.
 
     Returns an empty list if the endpoint has no history or does not exist.
+    Omitting limit returns all results; an explicit limit must be positive.
     """
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be positive.")
     connection = get_connection()
 
     try:
@@ -104,8 +109,9 @@ def get_check_history(endpoint_id: int) -> list[dict[str, int | float | str | bo
             FROM checks
             WHERE endpoint_id = ?
             ORDER BY checked_at DESC, id DESC
+            LIMIT ?
             """,
-            (endpoint_id,),
+            (endpoint_id, -1 if limit is None else limit),
         ).fetchall()
     finally:
         connection.close()

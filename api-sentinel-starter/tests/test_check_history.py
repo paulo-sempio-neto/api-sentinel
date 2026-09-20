@@ -185,3 +185,26 @@ def test_reject_negative_response_time(endpoint_id: int) -> None:
     with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
         save_check_result(endpoint_id, True, response_time_ms=-1)
     assert get_check_history(endpoint_id) == []
+
+
+@pytest.mark.parametrize("limit", [1, 2, 10])
+def test_history_optional_limit_preserves_order(endpoint_id: int, limit: int) -> None:
+    timestamps = [
+        "2026-01-02T12:00:00+00:00",
+        "2026-01-02T09:00:00+00:00",
+        "2026-01-02T12:00:00+00:00",
+    ]
+    ids = [
+        save_check_result(endpoint_id, True, checked_at=datetime.fromisoformat(value))
+        for value in timestamps
+    ]
+    expected_ids = [ids[2], ids[0], ids[1]]
+    assert [row["id"] for row in get_check_history(endpoint_id, limit=limit)] == expected_ids[:limit]
+    assert [row["id"] for row in get_check_history(endpoint_id)] == expected_ids
+    assert get_check_history(endpoint_id, limit=None) == get_check_history(endpoint_id)
+
+
+@pytest.mark.parametrize("limit", [0, -1])
+def test_history_rejects_nonpositive_limit(endpoint_id: int, limit: int) -> None:
+    with pytest.raises(ValueError, match="limit must be positive"):
+        get_check_history(endpoint_id, limit=limit)

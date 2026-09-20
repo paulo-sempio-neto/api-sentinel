@@ -3,7 +3,7 @@
 Projeto de portfólio e projeto final do CS50x para monitorar endpoints HTTP.
 Nesta etapa, a aplicação oferece uma API para cadastrar, listar, editar e excluir URLs,
 com persistência em SQLite e verificações HTTP manuais que gravam e retornam seus
-resultados. Rotas de consulta do histórico, interface web e monitoramento
+resultados, além de consulta do histórico pela API. Interface web e monitoramento
 automático/agendado ainda não estão implementados.
 
 ## Funcionalidades atuais
@@ -17,6 +17,7 @@ automático/agendado ainda não estão implementados.
 | `PUT /endpoints/{endpoint_id}` | Atualiza nome e URL de um endpoint |
 | `DELETE /endpoints/{endpoint_id}` | Exclui um endpoint |
 | `POST /endpoints/{endpoint_id}/check` | Executa uma verificação HTTP e retorna o resultado salvo |
+| `GET /endpoints/{endpoint_id}/checks` | Consulta o histórico salvo, com limite de resultados |
 | `GET /docs` | Abre a documentação interativa da API |
 
 O nome tem os espaços das extremidades removidos e não pode ficar vazio.
@@ -122,7 +123,7 @@ A tabela `checks` armazena `id`, `endpoint_id`, `checked_at` (texto ISO 8601 em 
 As funções internas de `database.py` recebem resultados já calculados:
 
 - `save_check_result(endpoint_id, success, *, status_code=None, response_time_ms=None, error_message=None, checked_at=None)` grava o resultado e retorna seu ID. `checked_at` aceita um `datetime` com fuso horário; se omitido, usa o instante atual em UTC.
-- `get_check_history(endpoint_id)` retorna uma lista de dicionários, com `success` convertido para booleano. Ordena por horário decrescente e, em caso de empate, por ID decrescente. Retorna `[]` se não houver histórico ou se o endpoint não existir.
+- `get_check_history(endpoint_id, limit=None)` retorna uma lista de dicionários, com `success` convertido para booleano. Ordena por horário decrescente e, em caso de empate, por ID decrescente. Retorna `[]` se não houver histórico ou se o endpoint não existir. O padrão continua sem limite; um limite positivo opcional é aplicado diretamente no SQLite.
 
 Chaves estrangeiras são ativadas em cada conexão. Gravar um resultado para um
 endpoint inexistente gera `sqlite3.IntegrityError`. Excluir um endpoint também
@@ -162,7 +163,29 @@ A resposta contém `id`, `endpoint_id`, `checked_at`, `success`, `status_code`,
 `response_time_ms` e `error_message`, com os mesmos valores persistidos. Cada
 chamada cria exatamente um resultado. Não há retries; a verificação de
 certificados TLS continua ativa, e configurações de proxy do ambiente não são
-herdadas (`trust_env=False`). Não há agendamento nem rota para listar o histórico.
+herdadas (`trust_env=False`). Não há agendamento.
+
+## Consulta do histórico (Etapa 5)
+
+Para consultar os resultados já armazenados de um endpoint:
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/endpoints/1/checks?limit=10"
+```
+
+A rota `GET /endpoints/{endpoint_id}/checks` retorna uma lista JSON com os mesmos
+campos da resposta da checagem manual: `id`, `endpoint_id`, `checked_at`, `success`,
+`status_code`, `response_time_ms` e `error_message`. Os resultados são ordenados
+do horário mais recente ao mais antigo; empates são resolvidos pelo maior ID.
+
+O parâmetro `limit` é opcional: padrão **50**, mínimo **1**, máximo **100**.
+O limite é aplicado na consulta SQLite, antes de carregar os resultados.
+Valores inválidos retornam a validação padrão `422` do FastAPI.
+
+Um endpoint existente sem verificações retorna `200` e `[]`; um ID inexistente
+retorna `404`. A consulta só lê os registros daquele endpoint: não executa HTTP,
+não cria verificações e não oferece paginação por cursor ou offset. Monitoramento
+automático/agendado continua não implementado.
 
 ## Testes automatizados
 
@@ -185,9 +208,12 @@ e inicialização sobre um banco existente sem perda de dados.
 Os testes de checagem manual usam `httpx.MockTransport` para simular respostas e
 exceções, com um relógio controlado para conferir a duração. O transporte HTTPX
 real é bloqueado durante os testes; nenhuma URL é acessada pela internet.
+Os testes da API de histórico cobrem formato, ordenação, isolamento, limites,
+validação e leitura sem efeitos colaterais, além da compatibilidade com a
+checagem manual e com o comportamento anterior da função de persistência.
 
 ## Próximas etapas
 
 O [ROADMAP.md](ROADMAP.md) acompanha as funcionalidades existentes e planejadas:
-consulta do histórico pela API, verificações periódicas, interface web e ampliação
+verificações periódicas, interface web e ampliação
 dos testes automatizados para essas funcionalidades.
