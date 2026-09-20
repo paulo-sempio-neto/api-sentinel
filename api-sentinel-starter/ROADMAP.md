@@ -41,10 +41,13 @@
 
 ## Phase 4 — Final CS50 delivery
 
-- [ ] Add automated checks while the program is running
-- [ ] Extend tests to cover monitoring, history, and scheduling
+- [x] Add in-process automated checks while the program is running
+- [x] Reuse the manual-check path without blocking the async event loop
+- [x] Isolate endpoint failures and reload endpoints on every monitoring cycle
+- [x] Stop the monitoring task through the FastAPI lifespan
+- [x] Extend tests to cover monitoring, history, and scheduling
 - [x] Document current features and local setup in the README
-- [ ] Complete the README with monitoring, history, UI, and test instructions
+- [ ] Complete the README with UI and final delivery instructions
 - [ ] Record the demonstration video
 - [ ] Submit the final project
 

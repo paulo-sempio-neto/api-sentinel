@@ -2,6 +2,8 @@
 
 # AI assistance: ChatGPT was used for guidance and code review.
 
+import asyncio
+import logging
 import sqlite3
 import time
 from collections.abc import AsyncIterator
@@ -13,16 +15,94 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query, status
 from pydantic import BaseModel, HttpUrl, StringConstraints
 
-from database import get_check_history, get_connection, initialize_database, save_check_result
+from database import (
+    get_check_history,
+    get_connection,
+    initialize_database,
+    save_check_result,
+)
 
 CHECK_TIMEOUT_SECONDS = 10.0
+MONITOR_INTERVAL_SECONDS = 60.0
+MONITORING_ENABLED = True
+
+logger = logging.getLogger(__name__)
+
+
+def get_registered_endpoint_ids() -> list[int]:
+    """Returns a fresh snapshot of endpoint IDs for one monitoring cycle."""
+    connection = get_connection()
+    try:
+        rows = connection.execute("SELECT id FROM endpoints ORDER BY id").fetchall()
+    finally:
+        connection.close()
+    return [row["id"] for row in rows]
+
+
+async def run_monitoring_cycle() -> None:
+    """Checks the endpoints in one fresh database snapshot without blocking asyncio."""
+    endpoint_ids = await asyncio.to_thread(get_registered_endpoint_ids)
+    for endpoint_id in endpoint_ids:
+        try:
+            await asyncio.to_thread(perform_endpoint_check, endpoint_id)
+        except HTTPException as error:
+            if error.status_code == status.HTTP_404_NOT_FOUND:
+                logger.info(
+                    "Endpoint %s was removed before its automatic check.", endpoint_id
+                )
+            else:
+                logger.exception("Automatic check failed for endpoint %s.", endpoint_id)
+        except Exception:
+            logger.exception("Automatic check failed for endpoint %s.", endpoint_id)
+
+
+async def wait_for_monitoring_interval(stop_event: asyncio.Event) -> bool:
+    """Waits for the next cycle, returning false when shutdown was requested."""
+    try:
+        await asyncio.wait_for(
+            stop_event.wait(), timeout=MONITOR_INTERVAL_SECONDS
+        )
+    except TimeoutError:
+        return True
+    return False
+
+
+async def monitor_endpoints(stop_event: asyncio.Event) -> None:
+    """Runs isolated monitoring cycles until application shutdown."""
+    try:
+        while await wait_for_monitoring_interval(stop_event):
+            try:
+                await run_monitoring_cycle()
+            except Exception:
+                logger.exception("Automatic monitoring cycle failed.")
+    except asyncio.CancelledError:
+        logger.info("Automatic endpoint monitoring was cancelled.")
+        raise
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Initializes the database when the application starts."""
+    """Initializes persistence and owns the in-process monitoring task."""
     initialize_database()
-    yield
+    monitor_task = None
+    stop_event = None
+    if MONITORING_ENABLED:
+        stop_event = asyncio.Event()
+        monitor_task = asyncio.create_task(
+            monitor_endpoints(stop_event), name="api-sentinel-monitor"
+        )
+    app.state.monitor_task = monitor_task
+
+    try:
+        yield
+    finally:
+        if monitor_task is not None and stop_event is not None:
+            stop_event.set()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
+        app.state.monitor_task = None
 
 
 app = FastAPI(

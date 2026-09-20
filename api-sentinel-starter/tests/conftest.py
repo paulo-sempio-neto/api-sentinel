@@ -7,6 +7,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+import app as app_module
 import database
 from app import app
 
@@ -20,8 +21,18 @@ def block_outbound_http(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", blocked_request)
 
 
+@pytest.fixture(autouse=True)
+def disable_automatic_monitoring(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keeps unrelated API tests deterministic; monitoring tests opt in."""
+    monkeypatch.setattr(app_module, "MONITORING_ENABLED", False)
+
+
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    disable_automatic_monitoring: None,
+) -> Iterator[TestClient]:
     monkeypatch.setattr(database, "DATABASE_PATH", tmp_path / "test.db")
     # Entering the context runs lifespan and creates this test's database.
     with TestClient(app) as test_client:

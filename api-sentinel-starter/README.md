@@ -3,8 +3,8 @@
 Projeto de portfólio e projeto final do CS50x para monitorar endpoints HTTP.
 Nesta etapa, a aplicação oferece uma API para cadastrar, listar, editar e excluir URLs,
 com persistência em SQLite e verificações HTTP manuais que gravam e retornam seus
-resultados, além de consulta do histórico pela API. Interface web e monitoramento
-automático/agendado ainda não estão implementados.
+resultados, consulta do histórico pela API e monitoramento automático enquanto a
+aplicação está em execução. Interface web e alertas ainda não estão implementados.
 
 ## Funcionalidades atuais
 
@@ -43,7 +43,7 @@ Esta etapa foi validada com Python 3.14.3 no Windows. Instale o Python 3.14 com 
 comando `py` disponível antes de seguir as instruções.
 
 As dependências diretas estão em `requirements.txt`: FastAPI, Uvicorn, Pydantic e
-HTTPX. A aplicação usa HTTPX para executar as verificações manuais.
+HTTPX. A aplicação usa HTTPX para executar as verificações manuais e automáticas.
 SQLite e os demais módulos da biblioteca padrão vêm com o Python. As dependências
 de testes também estão no arquivo: pytest e HTTPX2, usado pelo `TestClient` da
 versão atual do Starlette (base do FastAPI).
@@ -104,6 +104,10 @@ Abra <http://127.0.0.1:8000/docs> no navegador para experimentar as rotas.
 Use `Ctrl+C` no terminal do servidor para encerrar a aplicação. Se tiver ativado
 o ambiente virtual, execute `deactivate` para sair dele.
 
+Enquanto o processo estiver ativo, uma tarefa interna verifica os endpoints
+cadastrados a cada 60 segundos. Essa solução é intencionalmente simples e adequada
+ao servidor local executado em um único processo; não é um agendador distribuído.
+
 ## Banco de dados
 
 O arquivo é sempre `api-sentinel-starter/api_sentinel.db`, ao lado de
@@ -163,7 +167,8 @@ A resposta contém `id`, `endpoint_id`, `checked_at`, `success`, `status_code`,
 `response_time_ms` e `error_message`, com os mesmos valores persistidos. Cada
 chamada cria exatamente um resultado. Não há retries; a verificação de
 certificados TLS continua ativa, e configurações de proxy do ambiente não são
-herdadas (`trust_env=False`). Não há agendamento.
+herdadas (`trust_env=False`). A rota manual continua disponível mesmo com o
+monitoramento automático ativo.
 
 ## Consulta do histórico (Etapa 5)
 
@@ -185,7 +190,27 @@ Valores inválidos retornam a validação padrão `422` do FastAPI.
 Um endpoint existente sem verificações retorna `200` e `[]`; um ID inexistente
 retorna `404`. A consulta só lê os registros daquele endpoint: não executa HTTP,
 não cria verificações e não oferece paginação por cursor ou offset. Monitoramento
-automático/agendado continua não implementado.
+automático não altera esse comportamento de leitura.
+
+## Monitoramento automático (Etapa 6)
+
+O lifespan do FastAPI inicia uma única tarefa de monitoramento junto com a
+aplicação. Após cada intervalo de `MONITOR_INTERVAL_SECONDS = 60.0`, ela consulta
+novamente os IDs atualmente cadastrados e executa `perform_endpoint_check(...)`
+para cada um. Assim, verificações manuais e automáticas compartilham as mesmas
+regras HTTP e o mesmo caminho de persistência.
+
+Como o HTTPX usado pelo projeto é síncrono, tanto a leitura da lista quanto cada
+checagem são deslocadas para threads com `asyncio.to_thread(...)`, sem bloquear o
+event loop. Falhas normais de rede viram resultados persistidos; uma exceção
+inesperada em um endpoint é registrada no log e não impede os demais nem os ciclos
+seguintes. A lista é recarregada em todo ciclo, portanto endpoints novos entram no
+próximo ciclo e endpoints removidos deixam de participar.
+
+No encerramento, o lifespan sinaliza a tarefa e aguarda sua finalização. O
+monitoramento existe somente dentro deste processo: executar vários workers criaria
+um monitor por processo. Não há Redis, Celery, APScheduler, alertas ou coordenação
+distribuída nesta etapa.
 
 ## Testes automatizados
 
@@ -211,9 +236,13 @@ real é bloqueado durante os testes; nenhuma URL é acessada pela internet.
 Os testes da API de histórico cobrem formato, ordenação, isolamento, limites,
 validação e leitura sem efeitos colaterais, além da compatibilidade com a
 checagem manual e com o comportamento anterior da função de persistência.
+Os testes de monitoramento controlam diretamente os ciclos, sem esperar os 60
+segundos reais. Nas demais suítes, uma configuração interna desativa a tarefa para
+evitar verificações automáticas inesperadas. Também são cobertos início e parada,
+persistência, múltiplos endpoints, isolamento de falhas e recarga da lista.
 
 ## Próximas etapas
 
 O [ROADMAP.md](ROADMAP.md) acompanha as funcionalidades existentes e planejadas:
-verificações periódicas, interface web e ampliação
-dos testes automatizados para essas funcionalidades.
+interface web, alertas e ampliação dos testes automatizados para essas
+funcionalidades.
