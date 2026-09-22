@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: api-sentinel-starter
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14.3"
+          cache: pip
+          cache-dependency-path: api-sentinel-starter/requirements.txt
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Check dependency compatibility
+        run: python -m pip check
+
+      - name: Run tests
+        run: python -B -m pytest -q -p no:cacheprovider

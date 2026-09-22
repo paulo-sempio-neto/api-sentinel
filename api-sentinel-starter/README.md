@@ -1,5 +1,7 @@
 # API Sentinel
 
+[![CI](https://github.com/paulo-sempio-neto/api-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/paulo-sempio-neto/api-sentinel/actions/workflows/ci.yml)
+
 API Sentinel é uma aplicação web para cadastrar endpoints HTTP, verificar sua
 disponibilidade, preservar o histórico das tentativas e acompanhar os resultados
 por uma interface simples ou por uma API JSON.
@@ -278,6 +280,9 @@ Não é necessário iniciar o Uvicorn. Execute no diretório do projeto:
 .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider
 ```
 
+O GitHub Actions executa automaticamente a verificação das dependências e a suíte
+completa em cada `push` e `pull_request`.
+
 Cada teste que usa persistência recebe um banco SQLite temporário. Um bloqueio global impede transporte
 HTTP real, e respostas/falhas são simuladas com recursos do HTTPX e do pytest. O
 monitor automático fica desativado nas suítes não relacionadas e usa ciclos
@@ -325,13 +330,13 @@ exposição pública:
   duplicadas e não há coordenação distribuída;
 - checagens automáticas são sequenciais por ciclo;
 - não há alertas, notificações, rate limiting ou métricas agregadas de uptime;
-- não há configuração de Docker, CI/CD, proxy reverso, TLS do servidor ou
-  deployment.
+- não há configuração de Docker, proxy reverso, TLS do servidor ou deployment;
+  o CI valida dependências e testes, mas ainda não há CD.
 
 ## Próximos passos possíveis
 
 Uma fase futura de production readiness pode avaliar PostgreSQL, migrations,
-Docker, CI, autenticação, proteção CSRF e SSRF, rate limiting, alertas, deployment
+Docker, CD, autenticação, proteção CSRF e SSRF, rate limiting, alertas, deployment
 e processamento distribuído caso a escala realmente exija. Esses recursos não
 fazem parte do MVP atual.
 

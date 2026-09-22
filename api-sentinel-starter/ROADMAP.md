@@ -73,6 +73,11 @@ seção de production readiness são ideias, não funcionalidades atuais.
 - [x] Adicionar smoke tests para `/health` e o stylesheet local.
 - [x] Documentar limitações e separar o roadmap futuro.
 
+### Phase 1 — Integração contínua
+
+- [x] Configurar GitHub Actions para instalar dependências, executar `pip check`
+  e rodar a suíte de testes em cada `push` e `pull_request`.
+
 ## Entrega do projeto
 
 - [ ] Gravar o vídeo de demonstração.
@@ -87,7 +92,6 @@ seção de production readiness são ideias, não funcionalidades atuais.
 - [ ] Endurecer requisições contra SSRF e acesso a redes internas.
 - [ ] Adicionar rate limiting e políticas operacionais de timeout.
 - [ ] Criar alertas por canais configuráveis.
-- [ ] Adicionar CI para testes e verificações automatizadas.
 - [ ] Avaliar Docker e configuração de deployment.
 - [ ] Adotar processamento distribuído somente se a escala exigir.
 - [ ] Documentar backup, observabilidade e operação em produção.
