@@ -8,14 +8,11 @@ services:
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     numInstances: 1
-    disk:
-      name: api-sentinel-data
-      mountPath: /var/data
-      sizeGB: 1
+
     envVars:
       - key: PYTHON_VERSION
         value: 3.14.3
       - key: API_SENTINEL_DATABASE_PATH
-        value: /var/data/api_sentinel.db
+        value: api_sentinel.db
       - key: API_SENTINEL_CORS_ALLOWED_ORIGINS
         sync: false
