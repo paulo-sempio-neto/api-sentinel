@@ -19,5 +19,6 @@ export type EndpointStatus = 'healthy' | 'unhealthy' | 'not_checked'
 export interface EndpointSummary {
   endpoint: Endpoint
   latestCheck: CheckResult | null
+  history: CheckResult[]
   status: EndpointStatus
 }
