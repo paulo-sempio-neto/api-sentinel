@@ -1,6 +1,7 @@
 """FastAPI lifespan support for persistence and automatic monitoring."""
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,7 @@ async def managed_lifespan(
     initialize_database: Callable[[], None],
     monitoring_enabled: Callable[[], bool],
     monitor_endpoints: Callable[[asyncio.Event], Awaitable[None]],
+    logger: logging.Logger,
 ) -> AsyncIterator[None]:
     """Initializes persistence and owns the in-process monitoring task."""
     initialize_database()
@@ -25,6 +27,13 @@ async def managed_lifespan(
             monitor_endpoints(stop_event), name="api-sentinel-monitor"
         )
     app.state.monitor_task = monitor_task
+    logger.info(
+        "API Sentinel application started.",
+        extra={
+            "event": "application_started",
+            "monitoring_enabled": monitor_task is not None,
+        },
+    )
 
     try:
         yield
@@ -36,3 +45,4 @@ async def managed_lifespan(
             except asyncio.CancelledError:
                 pass
         app.state.monitor_task = None
+        logger.info("API Sentinel application stopped.", extra={"event": "application_stopped"})

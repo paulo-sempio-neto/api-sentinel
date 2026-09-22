@@ -1,8 +1,9 @@
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
-DATABASE_PATH = Path(__file__).resolve().parent / "api_sentinel.db"
+from config import SETTINGS
+
+DATABASE_PATH = SETTINGS.database_path
 
 
 def get_connection() -> sqlite3.Connection:

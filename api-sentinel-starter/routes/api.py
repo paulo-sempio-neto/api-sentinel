@@ -1,65 +1,99 @@
-"""JSON API route registration."""
+"""Versioned JSON API route registration."""
 
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import APIRouter, FastAPI, HTTPException, Query, status
 
-from schemas import EndpointCreate
+from schemas import (
+    AboutResponse,
+    CheckResultResponse,
+    DeleteEndpointResponse,
+    EndpointCreate,
+    EndpointResponse,
+    ErrorResponse,
+    HealthResponse,
+)
+
+CheckHistory = list[dict[str, int | float | str | bool | None]]
+EndpointRecord = dict[str, int | str]
 
 
-def register_api_routes(
-    app: FastAPI,
+def build_api_router(
     *,
-    create_endpoint: Callable[[EndpointCreate], dict[str, int | str]],
-    list_endpoints: Callable[[], list[dict[str, int | str]]],
-    update_endpoint: Callable[[int, EndpointCreate], dict[str, int | str]],
+    name_prefix: str,
+    create_endpoint: Callable[[EndpointCreate], EndpointRecord],
+    list_endpoints: Callable[[], list[EndpointRecord]],
+    update_endpoint: Callable[[int, EndpointCreate], EndpointRecord],
     delete_endpoint: Callable[[int], dict[str, str]],
-    get_endpoint: Callable[[int], dict[str, int | str] | None],
+    get_endpoint: Callable[[int], EndpointRecord | None],
     perform_check: Callable[[int], dict[str, int | float | str | bool | None]],
-    get_check_history: Callable[[int, int], list[dict[str, int | float | str | bool | None]]],
-) -> None:
-    """Registers the stable JSON API contract."""
+    get_check_history: Callable[[int, int], CheckHistory],
+) -> APIRouter:
+    """Builds one API contract; the same handlers back legacy and v1 routes."""
+    router = APIRouter()
+    route_name = lambda name: f"{name_prefix}{name}"
+    errors = {
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+    }
 
-    @app.get("/health", name="health")
-    def health() -> dict[str, str]:
-        return {"status": "ok", "service": "api-sentinel"}
+    @router.get("/health", response_model=HealthResponse, name=route_name("health"))
+    def health() -> HealthResponse:
+        return HealthResponse(status="ok", service="api-sentinel")
 
-    @app.get("/about", name="about")
-    def about() -> dict[str, str]:
-        return {
-            "project": "API Sentinel",
-            "purpose": "Monitor HTTP endpoints",
-            "stage": "CS50 final project",
-        }
+    @router.get("/about", response_model=AboutResponse, name=route_name("about"))
+    def about() -> AboutResponse:
+        return AboutResponse(
+            project="API Sentinel",
+            purpose="Monitor HTTP endpoints",
+            stage="CS50 final project",
+        )
 
-    @app.post(
-        "/endpoints", status_code=status.HTTP_201_CREATED, name="create_endpoint"
+    @router.post(
+        "/endpoints",
+        status_code=status.HTTP_201_CREATED,
+        response_model=EndpointResponse,
+        responses={status.HTTP_409_CONFLICT: {"model": ErrorResponse}},
+        name=route_name("create_endpoint"),
     )
-    def create_endpoint_route(endpoint: EndpointCreate) -> dict[str, int | str]:
+    def create_endpoint_route(endpoint: EndpointCreate) -> EndpointRecord:
         return create_endpoint(endpoint)
 
-    @app.get("/endpoints", name="list_endpoints")
-    def list_endpoints_route() -> list[dict[str, int | str]]:
+    @router.get(
+        "/endpoints", response_model=list[EndpointResponse], name=route_name("list_endpoints")
+    )
+    def list_endpoints_route() -> list[EndpointRecord]:
         return list_endpoints()
 
-    @app.put("/endpoints/{endpoint_id}", name="update_endpoint")
-    def update_endpoint_route(
-        endpoint_id: int, endpoint: EndpointCreate
-    ) -> dict[str, int | str]:
+    @router.put(
+        "/endpoints/{endpoint_id}",
+        response_model=EndpointResponse,
+        responses=errors,
+        name=route_name("update_endpoint"),
+    )
+    def update_endpoint_route(endpoint_id: int, endpoint: EndpointCreate) -> EndpointRecord:
         return update_endpoint(endpoint_id, endpoint)
 
-    @app.post("/endpoints/{endpoint_id}/check", name="check_endpoint")
-    def check_endpoint_route(
-        endpoint_id: int,
-    ) -> dict[str, int | float | str | bool | None]:
+    @router.post(
+        "/endpoints/{endpoint_id}/check",
+        response_model=CheckResultResponse,
+        responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}},
+        name=route_name("check_endpoint"),
+    )
+    def check_endpoint_route(endpoint_id: int) -> dict[str, int | float | str | bool | None]:
         return perform_check(endpoint_id)
 
-    @app.get("/endpoints/{endpoint_id}/checks", name="list_endpoint_checks")
+    @router.get(
+        "/endpoints/{endpoint_id}/checks",
+        response_model=list[CheckResultResponse],
+        responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}},
+        name=route_name("list_endpoint_checks"),
+    )
     def list_endpoint_checks_route(
         endpoint_id: int,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    ) -> list[dict[str, int | float | str | bool | None]]:
+    ) -> CheckHistory:
         if get_endpoint(endpoint_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -67,6 +101,42 @@ def register_api_routes(
             )
         return get_check_history(endpoint_id, limit)
 
-    @app.delete("/endpoints/{endpoint_id}", name="delete_endpoint")
+    @router.delete(
+        "/endpoints/{endpoint_id}",
+        response_model=DeleteEndpointResponse,
+        responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}},
+        name=route_name("delete_endpoint"),
+    )
     def delete_endpoint_route(endpoint_id: int) -> dict[str, str]:
         return delete_endpoint(endpoint_id)
+
+    return router
+
+
+def register_api_routes(
+    app: FastAPI,
+    *,
+    create_endpoint: Callable[[EndpointCreate], EndpointRecord],
+    list_endpoints: Callable[[], list[EndpointRecord]],
+    update_endpoint: Callable[[int, EndpointCreate], EndpointRecord],
+    delete_endpoint: Callable[[int], dict[str, str]],
+    get_endpoint: Callable[[int], EndpointRecord | None],
+    perform_check: Callable[[int], dict[str, int | float | str | bool | None]],
+    get_check_history: Callable[[int, int], CheckHistory],
+) -> None:
+    """Registers legacy routes and the canonical `/api/v1` frontend contract."""
+    dependencies = {
+        "create_endpoint": create_endpoint,
+        "list_endpoints": list_endpoints,
+        "update_endpoint": update_endpoint,
+        "delete_endpoint": delete_endpoint,
+        "get_endpoint": get_endpoint,
+        "perform_check": perform_check,
+        "get_check_history": get_check_history,
+    }
+    app.include_router(build_api_router(name_prefix="", **dependencies))
+    app.include_router(
+        build_api_router(name_prefix="v1_", **dependencies),
+        prefix="/api/v1",
+        tags=["API v1"],
+    )

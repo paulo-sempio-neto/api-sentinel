@@ -238,6 +238,12 @@ point continuam os mesmos.
 
 O resumo abaixo complementa a documentação interativa em `/docs`.
 
+### Versionamento
+
+Novos clientes devem consumir o contrato versionado em `/api/v1`. As rotas
+existentes sem o prefixo continuam disponíveis com as mesmas respostas para manter
+compatibilidade com a interface atual e clientes anteriores.
+
 | Método | Caminho | Finalidade |
 | --- | --- | --- |
 | `GET` | `/health` | Confirma que o API Sentinel está ativo |
@@ -252,6 +258,23 @@ O resumo abaixo complementa a documentação interativa em `/docs`.
 O parâmetro `limit` da rota de histórico tem padrão `50`, mínimo `1` e máximo
 `100`. Endpoint inexistente retorna `404`, URL duplicada retorna `409` e dados
 inválidos retornam `422`.
+
+## Configuração
+
+As configurações de execução usam variáveis de ambiente com o prefixo
+`API_SENTINEL_`; nenhuma é obrigatória no MVP local.
+
+| Variável | Padrão | Finalidade |
+| --- | --- | --- |
+| `API_SENTINEL_DATABASE_PATH` | `api_sentinel.db` no diretório do projeto | Caminho do SQLite |
+| `API_SENTINEL_CHECK_TIMEOUT_SECONDS` | `10.0` | Timeout HTTP de uma checagem |
+| `API_SENTINEL_MONITOR_INTERVAL_SECONDS` | `60.0` | Intervalo do monitor automático |
+| `API_SENTINEL_MONITORING_ENABLED` | `true` | Ativa ou desativa o monitor automático |
+| `API_SENTINEL_UI_HISTORY_LIMIT` | `25` | Resultados exibidos na página de detalhes |
+| `API_SENTINEL_LOG_LEVEL` | `INFO` | Nível dos logs estruturados em JSON |
+
+Por exemplo, `API_SENTINEL_LOG_LEVEL=DEBUG` aumenta o detalhamento dos logs. Os
+valores inválidos encerram a inicialização com uma mensagem de configuração clara.
 
 Exemplo de cadastro no PowerShell:
 

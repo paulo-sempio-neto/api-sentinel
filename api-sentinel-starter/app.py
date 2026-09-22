@@ -3,7 +3,6 @@
 # AI assistance: ChatGPT was used for guidance and code review.
 
 import asyncio
-import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -18,10 +17,12 @@ from config import (
     MONITOR_INTERVAL_SECONDS,
     MONITORING_ENABLED,
     PROJECT_DIRECTORY,
+    SETTINGS,
     UI_HISTORY_LIMIT,
 )
 from database import initialize_database
 from lifecycle import managed_lifespan
+from logging_config import configure_application_logging
 from routes.api import register_api_routes
 from routes.ui import register_ui_routes
 from schemas import EndpointCreate
@@ -29,7 +30,7 @@ from services import checks as check_service
 from services import endpoints as endpoint_service
 from services import monitoring as monitoring_service
 
-logger = logging.getLogger(__name__)
+logger = configure_application_logging(__name__, SETTINGS.log_level)
 
 # Preserve established import and monkeypatch seams while delegating implementation.
 create_endpoint = endpoint_service.create_endpoint
@@ -92,6 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         initialize_database=initialize_database,
         monitoring_enabled=lambda: MONITORING_ENABLED,
         monitor_endpoints=monitor_endpoints,
+        logger=logger,
     ):
         yield
 
