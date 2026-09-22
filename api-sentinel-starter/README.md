@@ -294,6 +294,31 @@ Invoke-RestMethod -Method Post `
     -Uri "http://127.0.0.1:8000/endpoints/1/check"
 ```
 
+## Frontend React
+
+O dashboard React/TypeScript vive em `frontend/` e consome a API versionada em
+`/api/v1`. Ele é separado da UI Jinja existente, que continua disponível sem
+alterações.
+
+Com o backend em execução, instale uma versão do Node.js compatível com Vite
+(Node 20.19+ na linha 20.x ou 22.12+) e execute em outro terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Abra a URL informada pelo Vite (normalmente `http://127.0.0.1:5173`). Durante o
+desenvolvimento, o proxy Vite encaminha `/api` para `http://127.0.0.1:8000`, sem
+exigir mudança de CORS no backend. O cliente usa `/api/v1` por padrão; copie
+`.env.example` para `.env.local` apenas quando precisar ajustar a origem da API
+ou do proxy.
+
+Para produção, sirva os arquivos gerados por `npm run build` atrás do mesmo
+proxy reverso que expõe a API, com fallback de SPA para `index.html`. Isso mantém
+as requisições da interface e da API na mesma origem.
+
 ## Testes
 
 Não é necessário iniciar o Uvicorn. Execute no diretório do projeto:
