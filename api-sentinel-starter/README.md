@@ -319,6 +319,80 @@ Para produção, sirva os arquivos gerados por `npm run build` atrás do mesmo
 proxy reverso que expõe a API, com fallback de SPA para `index.html`. Isso mantém
 as requisições da interface e da API na mesma origem.
 
+## Public deployment preparation
+
+This phase supports a demo deployment with separately hosted frontend and backend.
+It does not change API routes, the API contract, or monitoring behavior.
+
+```text
+Browser
+  -> Vercel: static React/Vite frontend
+  -> HTTPS requests to /api/v1
+  -> Render: FastAPI (one instance)
+  -> /var/data/api_sentinel.db: persistent SQLite
+```
+
+### Backend on Render
+
+The repository-root [render.yaml](../render.yaml) is a Render Blueprint for the
+`api-sentinel-starter` subdirectory. It installs `requirements.txt`, starts
+`uvicorn app:app --host 0.0.0.0 --port $PORT`, and uses `GET /health` as its health
+check. Import the repository as a Blueprint and choose an available service name if
+needed.
+
+The Blueprint deliberately runs one instance and mounts a 1 GB persistent disk at
+`/var/data`; it sets the SQLite database path to
+`/var/data/api_sentinel.db`. This persistence is required to retain endpoints and
+check history between restarts and deploys. A Render persistent disk requires a
+paid service and cannot be shared by multiple instances. SQLite is therefore
+acceptable only for this single-instance demo, not for a scalable or multi-user
+service.
+
+When creating the backend service, set the prompted environment variable to the
+exact browser origin of the deployed frontend:
+
+```text
+API_SENTINEL_CORS_ALLOWED_ORIGINS=https://<your-project>.vercel.app
+```
+
+Values must be full origins without a path. Separate additional origins, such as a
+custom domain, with commas. Do not use `*`. When this variable is empty, CORS
+middleware is not enabled, preserving local same-origin behavior. The Blueprint
+already pins `PYTHON_VERSION=3.14.3` and the persistent database path; all other
+`API_SENTINEL_*` settings retain their current defaults.
+
+### Frontend on Vercel
+
+Create a Vercel project from this repository with
+`api-sentinel-starter/frontend` as its Root Directory. Vercel detects Vite and runs
+the existing `npm run build`. [vercel.json](frontend/vercel.json) supplies the SPA
+fallback to `index.html`, so browser requests such as `/endpoints/1` continue to
+resolve through React Router.
+
+Before the production frontend build, set this Vercel environment variable:
+
+```text
+VITE_API_BASE_URL=https://<your-backend>.onrender.com/api/v1
+```
+
+Vite embeds this value at build time, so redeploy the frontend whenever the backend
+URL changes. Do not set `VITE_BACKEND_ORIGIN` in production; it is only the local
+Vite development-proxy target.
+
+### Post-deployment verification
+
+1. Open `https://<your-backend>.onrender.com/health` and verify a `200` response.
+2. Open `https://<your-backend>.onrender.com/docs` and verify the versioned API is
+   available at `/api/v1`.
+3. Open the Vercel frontend, verify dashboard data loads from the API, then directly
+   open an endpoint-detail route in a new browser tab.
+4. Confirm the browser console has no CORS error and the backend allowlist exactly
+   matches the frontend origin.
+
+The deployment remains intentionally without authentication, CSRF protection, or
+complete SSRF protection. Do not expose sensitive data or endpoints, and do not
+treat this single-instance demo configuration as a multi-user production baseline.
+
 ## Testes
 
 Não é necessário iniciar o Uvicorn. Execute no diretório do projeto:

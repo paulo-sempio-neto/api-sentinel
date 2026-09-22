@@ -101,6 +101,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app, templates = create_application(
     project_directory=PROJECT_DIRECTORY,
     lifespan=lifespan,
+    cors_allowed_origins=SETTINGS.cors_allowed_origins,
 )
 
 register_api_routes(

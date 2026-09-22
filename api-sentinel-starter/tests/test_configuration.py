@@ -2,10 +2,14 @@
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from application import create_application
 from config import Settings
 from logging_config import JsonFormatter
 
@@ -19,6 +23,9 @@ def test_settings_read_supported_environment_values() -> None:
             "API_SENTINEL_MONITORING_ENABLED": "false",
             "API_SENTINEL_UI_HISTORY_LIMIT": "10",
             "API_SENTINEL_LOG_LEVEL": "debug",
+            "API_SENTINEL_CORS_ALLOWED_ORIGINS": (
+                "https://dashboard.example.test, http://localhost:5173/"
+            ),
         }
     )
 
@@ -28,6 +35,10 @@ def test_settings_read_supported_environment_values() -> None:
     assert settings.monitoring_enabled is False
     assert settings.ui_history_limit == 10
     assert settings.log_level == "DEBUG"
+    assert settings.cors_allowed_origins == (
+        "https://dashboard.example.test",
+        "http://localhost:5173",
+    )
 
 
 @pytest.mark.parametrize(
@@ -36,11 +47,35 @@ def test_settings_read_supported_environment_values() -> None:
         {"API_SENTINEL_CHECK_TIMEOUT_SECONDS": "0"},
         {"API_SENTINEL_MONITORING_ENABLED": "sometimes"},
         {"API_SENTINEL_LOG_LEVEL": "verbose"},
+        {"API_SENTINEL_CORS_ALLOWED_ORIGINS": "https://dashboard.example.test/path"},
     ],
 )
 def test_settings_reject_invalid_environment_values(environment: dict[str, str]) -> None:
     with pytest.raises(ValueError):
         Settings.from_environment(environment)
+
+
+def test_application_allows_a_configured_cors_origin() -> None:
+    @asynccontextmanager
+    async def no_op_lifespan(_: FastAPI):
+        yield
+
+    application, _ = create_application(
+        project_directory=Path(__file__).resolve().parents[1],
+        lifespan=no_op_lifespan,
+        cors_allowed_origins=("https://dashboard.example.test",),
+    )
+    with TestClient(application) as client:
+        response = client.options(
+            "/health",
+            headers={
+                "Origin": "https://dashboard.example.test",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://dashboard.example.test"
 
 
 def test_json_formatter_includes_standard_and_contextual_fields() -> None:

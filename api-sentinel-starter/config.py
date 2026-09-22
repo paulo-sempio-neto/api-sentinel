@@ -4,6 +4,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 ENVIRONMENT_PREFIX = "API_SENTINEL_"
@@ -51,6 +52,33 @@ def _read_bool(environment: Mapping[str, str], key: str, default: bool) -> bool:
     raise ValueError(f"{key} must be a boolean value.")
 
 
+def _read_allowed_origins(environment: Mapping[str, str], key: str) -> tuple[str, ...]:
+    """Reads a comma-separated, explicit browser-origin allowlist."""
+    value = environment.get(key)
+    if value is None or not value.strip():
+        return ()
+
+    origins: list[str] = []
+    for raw_origin in value.split(","):
+        origin = raw_origin.strip().rstrip("/")
+        parsed = urlparse(origin)
+        if (
+            not origin
+            or parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.path
+            or parsed.params
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError(
+                f"{key} must be a comma-separated list of HTTP(S) origins without paths."
+            )
+        if origin not in origins:
+            origins.append(origin)
+    return tuple(origins)
+
+
 @dataclass(frozen=True)
 class Settings:
     """Runtime settings loaded once from `API_SENTINEL_*` environment variables."""
@@ -61,6 +89,7 @@ class Settings:
     monitoring_enabled: bool
     ui_history_limit: int
     log_level: str
+    cors_allowed_origins: tuple[str, ...]
 
     @classmethod
     def from_environment(
@@ -98,6 +127,9 @@ class Settings:
                 source, f"{ENVIRONMENT_PREFIX}UI_HISTORY_LIMIT", 25
             ),
             log_level=log_level,
+            cors_allowed_origins=_read_allowed_origins(
+                source, f"{ENVIRONMENT_PREFIX}CORS_ALLOWED_ORIGINS"
+            ),
         )
 
 
