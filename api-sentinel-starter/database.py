@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 DATABASE_PATH = Path(__file__).resolve().parent / "api_sentinel.db"
@@ -62,58 +62,23 @@ def save_check_result(
     error_message: str | None = None,
     checked_at: datetime | None = None,
 ) -> int:
-    """Stores a supplied result and returns its ID; performs no HTTP request.
+    """Compatibility wrapper for the check-result repository."""
+    from repositories import save_check_result as save_result
 
-    checked_at must include a timezone; omitted timestamps default to now in UTC.
-    SQLite raises IntegrityError for a missing endpoint or invalid constraints.
-    """
-    occurred_at = checked_at if checked_at is not None else datetime.now(timezone.utc)
-    if occurred_at.utcoffset() is None:
-        raise ValueError("checked_at must include a timezone.")
-    timestamp = occurred_at.astimezone(timezone.utc).isoformat(timespec="microseconds")
-    connection = get_connection()
-
-    try:
-        cursor = connection.execute(
-            """
-            INSERT INTO checks (
-                endpoint_id, checked_at, success, status_code,
-                response_time_ms, error_message
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (endpoint_id, timestamp, success, status_code, response_time_ms, error_message),
-        )
-        connection.commit()
-        return cursor.lastrowid
-    finally:
-        connection.close()
+    return save_result(
+        endpoint_id,
+        success,
+        status_code=status_code,
+        response_time_ms=response_time_ms,
+        error_message=error_message,
+        checked_at=checked_at,
+    )
 
 
 def get_check_history(
     endpoint_id: int, limit: int | None = None
 ) -> list[dict[str, int | float | str | bool | None]]:
-    """Returns results newest first, breaking timestamp ties by descending ID.
+    """Compatibility wrapper for the check-history repository."""
+    from repositories import get_check_history as load_history
 
-    Returns an empty list if the endpoint has no history or does not exist.
-    Omitting limit returns all results; an explicit limit must be positive.
-    """
-    if limit is not None and limit < 1:
-        raise ValueError("limit must be positive.")
-    connection = get_connection()
-
-    try:
-        rows = connection.execute(
-            """
-            SELECT id, endpoint_id, checked_at, success, status_code,
-                   response_time_ms, error_message
-            FROM checks
-            WHERE endpoint_id = ?
-            ORDER BY checked_at DESC, id DESC
-            LIMIT ?
-            """,
-            (endpoint_id, -1 if limit is None else limit),
-        ).fetchall()
-    finally:
-        connection.close()
-
-    return [{**dict(row), "success": bool(row["success"])} for row in rows]
+    return load_history(endpoint_id, limit)
