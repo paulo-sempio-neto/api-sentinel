@@ -70,7 +70,7 @@ export function EndpointCard({
       </dl>
       <div className="check-history-preview">
         <div className="check-history-copy">
-          <span className="check-history-label">Recent checks</span>
+          <span className="check-history-label">Recorded history</span>
           <span className="check-history-summary">
             {recentChecks.length > 0
               ? `${successfulChecks} passed, ${failedChecks} failed`
