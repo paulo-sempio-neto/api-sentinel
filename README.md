@@ -2,14 +2,15 @@
 
 API Sentinel is a portfolio project for monitoring HTTP APIs from a clean web dashboard. It lets a user register API endpoints, run checks on demand, review the latest status, inspect response time history, and remove endpoints that are no longer monitored.
 
-The project was built as a CS50x final project and evolved into a full-stack demo with a React frontend, a FastAPI backend, and SQLite persistence.
+The project was built as a CS50x final project and evolved into a full-stack demo with a React frontend, a FastAPI backend, SQLite persistence, API validation, check history, and automated backend tests.
 
 ## Links
 
 - **Live Demo:** [api-sentinel-pi.vercel.app](https://api-sentinel-pi.vercel.app)
-- **Backend/API:** [api-sentinel-backend-5w2w.onrender.com](https://api-sentinel-backend-5w2w.onrender.com)
+- **Backend/API Docs:** [api-sentinel-backend-5w2w.onrender.com/docs](https://api-sentinel-backend-5w2w.onrender.com/docs)
+- **Backend Health Check:** [api-sentinel-backend-5w2w.onrender.com/health](https://api-sentinel-backend-5w2w.onrender.com/health)
 - **GitHub Repository:** [github.com/paulo-sempio-neto/api-sentinel](https://github.com/paulo-sempio-neto/api-sentinel)
-- **CS50x Certificate:** Public certificate URL not added yet.
+- **CS50x Certificate:** Add the public certificate URL here when it is available.
 
 ## Features
 
@@ -37,6 +38,14 @@ No screenshot images are currently committed to the repository. The live dashboa
 | HTTP checks | HTTPX |
 | Testing | pytest, FastAPI TestClient |
 | Deployment | Vercel for frontend, Render for backend |
+
+## Backend Highlights
+
+- FastAPI route layer with typed request and response models.
+- SQLite schema with endpoint records and check history.
+- Manual check workflow with persisted status code, latency, timestamp, and error message.
+- Duplicate URL handling, validation errors, and clear API responses.
+- Offline pytest suite with temporary databases and blocked real outbound HTTP.
 
 ## Architecture
 
