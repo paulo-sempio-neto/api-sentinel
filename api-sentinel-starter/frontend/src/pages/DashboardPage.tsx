@@ -9,6 +9,29 @@ import { ErrorState } from '../components/ErrorState'
 import { LoadingState } from '../components/LoadingState'
 import { formatShortDateTime, getEndpointStatus } from '../utils/formatters'
 
+const HISTORY_LIMIT = 100
+
+function formatSuccessRate(successfulChecks: number, totalChecks: number): string {
+  if (totalChecks === 0) {
+    return '—'
+  }
+
+  return `${((successfulChecks / totalChecks) * 100).toFixed(1)}%`
+}
+
+function getAverageResponseTime(responseTimes: Array<number | null>): string {
+  const recordedResponseTimes = responseTimes.filter((value): value is number => value !== null)
+
+  if (recordedResponseTimes.length === 0) {
+    return '—'
+  }
+
+  const average = recordedResponseTimes.reduce((total, value) => total + value, 0)
+    / recordedResponseTimes.length
+
+  return `${Math.round(average)} ms`
+}
+
 function readableError(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message
@@ -46,7 +69,7 @@ export function DashboardPage() {
         const endpoints = await listEndpoints(controller.signal)
         const latestChecks = await Promise.all(
           endpoints.map(async (endpoint) => {
-            const checks = await listEndpointChecks(endpoint.id, 7, controller.signal)
+            const checks = await listEndpointChecks(endpoint.id, HISTORY_LIMIT, controller.signal)
             const latestCheck = checks[0] ?? null
 
             return {
@@ -83,10 +106,19 @@ export function DashboardPage() {
     return <LoadingState label="Loading monitored endpoints…" />
   }
 
-  const healthyCount = summaries.filter((summary) => summary.status === 'healthy').length
-  const unhealthyCount = summaries.filter((summary) => summary.status === 'unhealthy').length
-  const uncheckedCount = summaries.filter((summary) => summary.status === 'not_checked').length
-  const formattedLastUpdated = lastUpdatedAt ? formatShortDateTime(lastUpdatedAt) : 'Not loaded yet'
+  const allChecks = summaries.flatMap((summary) => summary.history)
+  const successfulChecks = allChecks.filter((check) => check.success).length
+  const failedChecks = allChecks.length - successfulChecks
+  const latestCheck = allChecks.reduce<typeof allChecks[number] | null>((latest, check) => {
+    if (!latest || new Date(check.checked_at).getTime() > new Date(latest.checked_at).getTime()) {
+      return check
+    }
+
+    return latest
+  }, null)
+  const successRate = formatSuccessRate(successfulChecks, allChecks.length)
+  const averageResponseTime = getAverageResponseTime(allChecks.map((check) => check.response_time_ms))
+  const formattedLastCheck = latestCheck ? formatShortDateTime(latestCheck.checked_at) : 'Not checked yet'
 
   async function handleRunCheck(endpointId: number) {
     setActionError(null)
@@ -107,7 +139,7 @@ export function DashboardPage() {
           const history = [
             check,
             ...summary.history.filter((historyItem) => historyItem.id !== check.id),
-          ].slice(0, 7)
+          ].slice(0, HISTORY_LIMIT)
 
           return {
             ...summary,
@@ -169,26 +201,36 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="summary-grid" aria-label="Endpoint summary">
+      <section className="summary-grid dashboard-metrics" aria-label="Monitoring metrics">
         <article className="metric-card metric-card-total">
           <span className="metric-label">Monitored endpoints</span>
           <strong>{summaries.length}</strong>
           <span className="metric-context">All configured services</span>
         </article>
         <article className="metric-card metric-card-success">
-          <span className="metric-label">Operational</span>
-          <strong>{healthyCount}</strong>
-          <span className="metric-context">Latest check succeeded</span>
+          <span className="metric-label">Checks recorded</span>
+          <strong>{allChecks.length}</strong>
+          <span className="metric-context">Up to {HISTORY_LIMIT} per endpoint</span>
+        </article>
+        <article className="metric-card metric-card-success">
+          <span className="metric-label">Success rate</span>
+          <strong>{successRate}</strong>
+          <span className="metric-context">{successfulChecks} successful checks</span>
         </article>
         <article className="metric-card metric-card-failure">
-          <span className="metric-label">Issues detected</span>
-          <strong>{unhealthyCount}</strong>
-          <span className="metric-context">Latest check needs attention</span>
+          <span className="metric-label">Failures</span>
+          <strong>{failedChecks}</strong>
+          <span className="metric-context">Checks needing attention</span>
+        </article>
+        <article className="metric-card metric-card-latency">
+          <span className="metric-label">Average response</span>
+          <strong>{averageResponseTime}</strong>
+          <span className="metric-context">Across checks with latency</span>
         </article>
         <article className="metric-card metric-card-updated">
-          <span className="metric-label">Last updated</span>
-          <strong className="metric-date">{formattedLastUpdated}</strong>
-          <span className="metric-context">{uncheckedCount} awaiting first check</span>
+          <span className="metric-label">Last check</span>
+          <strong className="metric-date">{formattedLastCheck}</strong>
+          <span className="metric-context">Dashboard updated {lastUpdatedAt ? formatShortDateTime(lastUpdatedAt) : 'just now'}</span>
         </article>
       </section>
 

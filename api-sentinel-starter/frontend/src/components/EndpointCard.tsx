@@ -23,8 +23,15 @@ export function EndpointCard({
   const { endpoint, history, latestCheck, status } = summary
   const recentChecks = history.slice(0, 7).reverse()
   const actionInProgress = isChecking || isDeleting
-  const successfulChecks = recentChecks.filter((check) => check.success).length
-  const failedChecks = recentChecks.length - successfulChecks
+  const successfulChecks = history.filter((check) => check.success).length
+  const failedChecks = history.length - successfulChecks
+  const recordedResponseTimes = history
+    .map((check) => check.response_time_ms)
+    .filter((value): value is number => value !== null)
+  const averageResponseTime = recordedResponseTimes.length > 0
+    ? recordedResponseTimes.reduce((total, value) => total + value, 0) / recordedResponseTimes.length
+    : null
+  const uptime = history.length > 0 ? (successfulChecks / history.length) * 100 : null
 
   return (
     <article
@@ -41,8 +48,16 @@ export function EndpointCard({
       </div>
       <dl className="endpoint-stats">
         <div className="endpoint-stat-primary">
-          <dt>Response time</dt>
-          <dd>{formatLatency(latestCheck?.response_time_ms ?? null)}</dd>
+          <dt>Basic uptime</dt>
+          <dd>{uptime === null ? 'No data' : `${uptime.toFixed(1)}%`}</dd>
+        </div>
+        <div>
+          <dt>Total checks</dt>
+          <dd>{history.length}</dd>
+        </div>
+        <div>
+          <dt>Average response</dt>
+          <dd>{formatLatency(averageResponseTime)}</dd>
         </div>
         <div>
           <dt>Last status code</dt>
