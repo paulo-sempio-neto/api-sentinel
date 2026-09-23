@@ -1,6 +1,8 @@
 """Versioned JSON API route registration."""
 
 from collections.abc import Callable
+import logging
+import sqlite3
 from typing import Annotated
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, status
@@ -13,10 +15,12 @@ from schemas import (
     EndpointResponse,
     ErrorResponse,
     HealthResponse,
+    ReadinessResponse,
 )
 
 CheckHistory = list[dict[str, int | float | str | bool | None]]
 EndpointRecord = dict[str, int | str]
+logger = logging.getLogger("app")
 
 
 def build_api_router(
@@ -28,6 +32,7 @@ def build_api_router(
     delete_endpoint: Callable[[int], dict[str, str]],
     get_endpoint: Callable[[int], EndpointRecord | None],
     perform_check: Callable[[int], dict[str, int | float | str | bool | None]],
+    check_readiness: Callable[[], None],
     get_check_history: Callable[[int, int], CheckHistory],
 ) -> APIRouter:
     """Builds one API contract; the same handlers back legacy and v1 routes."""
@@ -41,6 +46,25 @@ def build_api_router(
     @router.get("/health", response_model=HealthResponse, name=route_name("health"))
     def health() -> HealthResponse:
         return HealthResponse(status="ok", service="api-sentinel")
+
+    @router.get(
+        "/ready",
+        response_model=ReadinessResponse,
+        responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse}},
+        name=route_name("ready"),
+    )
+    def ready() -> ReadinessResponse:
+        try:
+            check_readiness()
+        except sqlite3.Error:
+            logger.exception(
+                "Readiness check failed.", extra={"event": "readiness_check_failed"}
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service dependencies are unavailable.",
+            ) from None
+        return ReadinessResponse(status="ready", service="api-sentinel")
 
     @router.get("/about", response_model=AboutResponse, name=route_name("about"))
     def about() -> AboutResponse:
@@ -122,6 +146,7 @@ def register_api_routes(
     delete_endpoint: Callable[[int], dict[str, str]],
     get_endpoint: Callable[[int], EndpointRecord | None],
     perform_check: Callable[[int], dict[str, int | float | str | bool | None]],
+    check_readiness: Callable[[], None],
     get_check_history: Callable[[int, int], CheckHistory],
 ) -> None:
     """Registers legacy routes and the canonical `/api/v1` frontend contract."""
@@ -132,6 +157,7 @@ def register_api_routes(
         "delete_endpoint": delete_endpoint,
         "get_endpoint": get_endpoint,
         "perform_check": perform_check,
+        "check_readiness": check_readiness,
         "get_check_history": get_check_history,
     }
     app.include_router(build_api_router(name_prefix="", **dependencies))

@@ -81,6 +81,27 @@ def test_application_allows_a_configured_cors_origin() -> None:
     )
 
 
+def test_application_hides_unexpected_error_details() -> None:
+    @asynccontextmanager
+    async def no_op_lifespan(_: FastAPI):
+        yield
+
+    application, _ = create_application(
+        project_directory=Path(__file__).resolve().parents[1],
+        lifespan=no_op_lifespan,
+    )
+
+    @application.get("/explode")
+    def explode() -> None:
+        raise RuntimeError("private database path")
+
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.get("/explode")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "An unexpected server error occurred."}
+
+
 def test_json_formatter_includes_standard_and_contextual_fields() -> None:
     record = logging.LogRecord(
         "api-sentinel",

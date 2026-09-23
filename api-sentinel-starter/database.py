@@ -54,6 +54,16 @@ def initialize_database() -> None:
         connection.close()
 
 
+def check_database_connection() -> None:
+    """Verifies that the configured SQLite database and core tables are available."""
+    connection = get_connection()
+    try:
+        connection.execute("SELECT 1 FROM endpoints LIMIT 1").fetchone()
+        connection.execute("SELECT 1 FROM checks LIMIT 1").fetchone()
+    finally:
+        connection.close()
+
+
 def save_check_result(
     endpoint_id: int,
     success: bool,

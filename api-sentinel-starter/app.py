@@ -20,7 +20,7 @@ from config import (
     SETTINGS,
     UI_HISTORY_LIMIT,
 )
-from database import initialize_database
+from database import check_database_connection, initialize_database
 from lifecycle import managed_lifespan
 from logging_config import configure_application_logging
 from routes.api import register_api_routes
@@ -102,6 +102,7 @@ app, templates = create_application(
     project_directory=PROJECT_DIRECTORY,
     lifespan=lifespan,
     cors_allowed_origins=SETTINGS.cors_allowed_origins,
+    logger=logger,
 )
 
 register_api_routes(
@@ -112,6 +113,7 @@ register_api_routes(
     delete_endpoint=lambda endpoint_id: delete_endpoint(endpoint_id),
     get_endpoint=lambda endpoint_id: get_endpoint_record(endpoint_id),
     perform_check=lambda endpoint_id: perform_endpoint_check(endpoint_id),
+    check_readiness=lambda: check_database_connection(),
     get_check_history=lambda endpoint_id, limit: endpoint_service.get_check_history(
         endpoint_id, limit
     ),

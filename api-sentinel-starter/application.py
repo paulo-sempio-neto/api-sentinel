@@ -2,10 +2,12 @@
 
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
+import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -15,6 +17,7 @@ def create_application(
     project_directory: Path,
     lifespan: Callable[[FastAPI], AbstractAsyncContextManager[None]],
     cors_allowed_origins: tuple[str, ...] = (),
+    logger: logging.Logger | None = None,
 ) -> tuple[FastAPI, Jinja2Templates]:
     """Creates the application and its shared static/template resources."""
     app = FastAPI(
@@ -23,6 +26,20 @@ def create_application(
         version="0.1.0",
         lifespan=lifespan,
     )
+    application_logger = logger or logging.getLogger(__name__)
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(_: Request, error: Exception) -> JSONResponse:
+        """Logs internal failures while keeping the public error response safe."""
+        application_logger.exception(
+            "Unhandled application error.",
+            extra={"event": "unhandled_exception", "exception_type": type(error).__name__},
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "An unexpected server error occurred."},
+        )
+
     if cors_allowed_origins:
         app.add_middleware(
             CORSMiddleware,

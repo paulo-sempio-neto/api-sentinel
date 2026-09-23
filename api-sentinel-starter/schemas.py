@@ -32,6 +32,13 @@ class HealthResponse(BaseModel):
     service: str
 
 
+class ReadinessResponse(BaseModel):
+    """Stable dependency-readiness response for load balancers and operators."""
+
+    status: str
+    service: str
+
+
 class AboutResponse(BaseModel):
     """Stable project metadata response."""
 
