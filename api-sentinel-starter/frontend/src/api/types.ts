@@ -9,6 +9,8 @@ export interface EndpointCreate {
   url: string
 }
 
+export type EndpointUpdate = EndpointCreate
+
 export interface DeleteEndpointResponse {
   message: string
 }

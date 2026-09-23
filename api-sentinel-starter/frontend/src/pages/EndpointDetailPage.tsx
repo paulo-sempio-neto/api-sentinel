@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { FormEvent, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { checkEndpoint, listEndpointChecks, listEndpoints } from '../api/endpoints'
+import { checkEndpoint, deleteEndpoint, listEndpointChecks, listEndpoints, updateEndpoint } from '../api/endpoints'
 import type { CheckResult, Endpoint } from '../api/types'
 import { EmptyState } from '../components/EmptyState'
 import { ErrorState } from '../components/ErrorState'
@@ -29,17 +29,44 @@ function readableActionError(error: unknown): string {
     return error.message
   }
 
-  return 'The endpoint could not be refreshed. Please try again.'
+  return 'The endpoint action could not be completed. Please try again.'
+}
+
+function submitErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 0) {
+      return 'Unable to reach the API Sentinel backend. Please try again.'
+    }
+
+    if (error.status === 409) {
+      return error.message || 'This URL is already registered.'
+    }
+
+    if (error.status === 422) {
+      return 'Enter a valid API name and HTTP/HTTPS URL.'
+    }
+
+    return error.message
+  }
+
+  return 'The endpoint could not be updated. Please try again.'
 }
 
 export function EndpointDetailPage() {
   const { endpointId } = useParams()
+  const navigate = useNavigate()
   const numericEndpointId = Number(endpointId)
   const [detail, setDetail] = useState<EndpointDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editUrl, setEditUrl] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const actionLockRef = useRef(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -59,11 +86,18 @@ export function EndpointDetailPage() {
           listEndpointChecks(numericEndpointId, 100, controller.signal),
         ])
 
+        const endpoint = endpoints.find((currentEndpoint) => currentEndpoint.id === numericEndpointId) ?? null
+
         if (!controller.signal.aborted) {
           setDetail({
-            endpoint: endpoints.find((endpoint) => endpoint.id === numericEndpointId) ?? null,
+            endpoint,
             checks,
           })
+
+          if (endpoint) {
+            setEditName(endpoint.name)
+            setEditUrl(endpoint.url)
+          }
         }
       } catch (caughtError) {
         if (!controller.signal.aborted) {
@@ -104,13 +138,16 @@ export function EndpointDetailPage() {
   const recentChecks = detail.checks.slice(0, 7).reverse()
   const recentSuccesses = recentChecks.filter((check) => check.success).length
   const recentFailures = recentChecks.length - recentSuccesses
+  const actionInProgress = isRefreshing || isUpdating || isDeleting
 
   async function handleRefresh() {
-    if (isRefreshing) {
+    if (actionLockRef.current) {
       return
     }
 
+    actionLockRef.current = true
     setActionError(null)
+    setActionSuccess(null)
     setIsRefreshing(true)
 
     try {
@@ -131,7 +168,76 @@ export function EndpointDetailPage() {
     } catch (caughtError) {
       setActionError(readableActionError(caughtError))
     } finally {
+      actionLockRef.current = false
       setIsRefreshing(false)
+    }
+  }
+
+  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (actionLockRef.current) {
+      return
+    }
+
+    const trimmedName = editName.trim()
+    const trimmedUrl = editUrl.trim()
+
+    setActionError(null)
+    setActionSuccess(null)
+
+    if (!trimmedName || !trimmedUrl) {
+      setActionError('Enter a valid API name and HTTP/HTTPS URL.')
+      return
+    }
+
+    actionLockRef.current = true
+    setIsUpdating(true)
+
+    try {
+      const endpoint = await updateEndpoint(numericEndpointId, {
+        name: trimmedName,
+        url: trimmedUrl,
+      })
+
+      setDetail((currentDetail) => (
+        currentDetail ? { ...currentDetail, endpoint } : currentDetail
+      ))
+      setEditName(endpoint.name)
+      setEditUrl(endpoint.url)
+      setActionSuccess(`${endpoint.name} was updated.`)
+    } catch (caughtError) {
+      setActionError(submitErrorMessage(caughtError))
+    } finally {
+      actionLockRef.current = false
+      setIsUpdating(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (actionLockRef.current) {
+      return
+    }
+
+    const endpointLabel = detail?.endpoint?.name ?? 'this endpoint'
+
+    if (!window.confirm(`Remove ${endpointLabel} from API Sentinel?`)) {
+      return
+    }
+
+    actionLockRef.current = true
+    setActionError(null)
+    setActionSuccess(null)
+    setIsDeleting(true)
+
+    try {
+      await deleteEndpoint(numericEndpointId)
+      navigate('/')
+    } catch (caughtError) {
+      setActionError(readableActionError(caughtError))
+    } finally {
+      actionLockRef.current = false
+      setIsDeleting(false)
     }
   }
 
@@ -156,17 +262,76 @@ export function EndpointDetailPage() {
           <button
             aria-busy={isRefreshing}
             className="button button-secondary"
-            disabled={isRefreshing}
+            disabled={actionInProgress}
             type="button"
             onClick={handleRefresh}
           >
             {isRefreshing ? <span className="button-spinner" aria-hidden="true" /> : null}
             {isRefreshing ? 'Refreshing...' : 'Refresh data'}
           </button>
+          <button
+            aria-busy={isDeleting}
+            className="button button-danger"
+            disabled={actionInProgress}
+            type="button"
+            onClick={handleDelete}
+          >
+            {isDeleting ? <span className="button-spinner" aria-hidden="true" /> : null}
+            {isDeleting ? 'Removing...' : 'Remove'}
+          </button>
         </div>
       </section>
 
       {actionError ? <p className="form-message form-message-error" role="alert">{actionError}</p> : null}
+      {actionSuccess ? <p className="form-message form-message-success" role="status">{actionSuccess}</p> : null}
+
+      <section className="add-endpoint-panel" aria-labelledby="edit-endpoint-title">
+        <div className="section-heading">
+          <div className="section-heading-copy">
+            <p className="eyebrow">Endpoint settings</p>
+            <h2 id="edit-endpoint-title">Edit endpoint</h2>
+            <p>Update the monitored name or URL without clearing the recorded check history.</p>
+          </div>
+        </div>
+
+        <form className="add-endpoint-form" onSubmit={handleUpdate}>
+          <label>
+            <span>API name</span>
+            <input
+              autoComplete="off"
+              disabled={actionInProgress}
+              name="name"
+              onChange={(event) => setEditName(event.target.value)}
+              placeholder="Primary API"
+              required
+              type="text"
+              value={editName}
+            />
+          </label>
+          <label>
+            <span>API URL</span>
+            <input
+              autoComplete="url"
+              disabled={actionInProgress}
+              name="url"
+              onChange={(event) => setEditUrl(event.target.value)}
+              placeholder="https://example.com/health"
+              required
+              type="url"
+              value={editUrl}
+            />
+          </label>
+          <button
+            aria-busy={isUpdating}
+            className="button button-primary"
+            disabled={actionInProgress}
+            type="submit"
+          >
+            {isUpdating ? <span className="button-spinner" aria-hidden="true" /> : null}
+            {isUpdating ? 'Saving...' : 'Save changes'}
+          </button>
+        </form>
+      </section>
 
       <section className="endpoint-info-grid" aria-label="Endpoint information">
         <article>

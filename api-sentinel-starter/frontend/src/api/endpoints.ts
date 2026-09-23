@@ -1,5 +1,5 @@
 import { request } from './client'
-import type { CheckResult, DeleteEndpointResponse, Endpoint, EndpointCreate } from './types'
+import type { CheckResult, DeleteEndpointResponse, Endpoint, EndpointCreate, EndpointUpdate } from './types'
 
 export function listEndpoints(signal?: AbortSignal): Promise<Endpoint[]> {
   return request<Endpoint[]>('/endpoints', { signal })
@@ -8,6 +8,16 @@ export function listEndpoints(signal?: AbortSignal): Promise<Endpoint[]> {
 export function createEndpoint(endpoint: EndpointCreate): Promise<Endpoint> {
   return request<Endpoint>('/endpoints', {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(endpoint),
+  })
+}
+
+export function updateEndpoint(endpointId: number, endpoint: EndpointUpdate): Promise<Endpoint> {
+  return request<Endpoint>(`/endpoints/${endpointId}`, {
+    method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
