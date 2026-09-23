@@ -23,6 +23,8 @@ export function EndpointCard({
   const { endpoint, history, latestCheck, status } = summary
   const recentChecks = history.slice(0, 7).reverse()
   const actionInProgress = isChecking || isDeleting
+  const successfulChecks = recentChecks.filter((check) => check.success).length
+  const failedChecks = recentChecks.length - successfulChecks
 
   return (
     <article
@@ -52,7 +54,14 @@ export function EndpointCard({
         </div>
       </dl>
       <div className="check-history-preview">
-        <span className="check-history-label">Recent checks</span>
+        <div className="check-history-copy">
+          <span className="check-history-label">Recent checks</span>
+          <span className="check-history-summary">
+            {recentChecks.length > 0
+              ? `${successfulChecks} passed, ${failedChecks} failed`
+              : 'Awaiting first result'}
+          </span>
+        </div>
         {recentChecks.length > 0 ? (
           <div className="check-history-bars" aria-label={`${recentChecks.length} most recent checks, oldest first`}>
             {recentChecks.map((check) => (

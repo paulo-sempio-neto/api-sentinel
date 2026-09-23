@@ -85,6 +85,8 @@ export function EndpointDetailPage() {
 
   const latestCheck = detail.checks[0] ?? null
   const status = getEndpointStatus(latestCheck)
+  const successfulChecks = detail.checks.filter((check) => check.success).length
+  const failedChecks = detail.checks.length - successfulChecks
 
   return (
     <div className="endpoint-detail-page">
@@ -108,6 +110,24 @@ export function EndpointDetailPage() {
             Refresh data
           </button>
         </div>
+      </section>
+
+      <section className="endpoint-info-grid" aria-label="Endpoint information">
+        <article>
+          <span className="metric-label">Endpoint URL</span>
+          <a className="endpoint-url endpoint-url-link" href={detail.endpoint.url} target="_blank" rel="noreferrer">
+            {detail.endpoint.url}
+          </a>
+        </article>
+        <article>
+          <span className="metric-label">Recorded checks</span>
+          <strong>{detail.checks.length}</strong>
+          <span className="endpoint-info-context">{successfulChecks} successful, {failedChecks} failed</span>
+        </article>
+        <article>
+          <span className="metric-label">Current state</span>
+          <StatusBadge status={status} />
+        </article>
       </section>
 
       <section className="detail-metrics" aria-label="Latest endpoint result">

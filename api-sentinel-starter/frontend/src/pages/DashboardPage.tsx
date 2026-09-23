@@ -7,7 +7,7 @@ import { EmptyState } from '../components/EmptyState'
 import { EndpointCard } from '../components/EndpointCard'
 import { ErrorState } from '../components/ErrorState'
 import { LoadingState } from '../components/LoadingState'
-import { getEndpointStatus } from '../utils/formatters'
+import { formatShortDateTime, getEndpointStatus } from '../utils/formatters'
 
 function readableError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -27,6 +27,7 @@ function readableActionError(error: unknown): string {
 
 export function DashboardPage() {
   const [summaries, setSummaries] = useState<EndpointSummary[] | null>(null)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<{
@@ -59,6 +60,7 @@ export function DashboardPage() {
 
         if (!controller.signal.aborted) {
           setSummaries(latestChecks)
+          setLastUpdatedAt(new Date().toISOString())
         }
       } catch (caughtError) {
         if (!controller.signal.aborted) {
@@ -83,6 +85,7 @@ export function DashboardPage() {
   const healthyCount = summaries.filter((summary) => summary.status === 'healthy').length
   const unhealthyCount = summaries.filter((summary) => summary.status === 'unhealthy').length
   const uncheckedCount = summaries.filter((summary) => summary.status === 'not_checked').length
+  const formattedLastUpdated = lastUpdatedAt ? formatShortDateTime(lastUpdatedAt) : 'Not loaded yet'
 
   async function handleRunCheck(endpointId: number) {
     setActionError(null)
@@ -181,10 +184,10 @@ export function DashboardPage() {
           <strong>{unhealthyCount}</strong>
           <span className="metric-context">Latest check needs attention</span>
         </article>
-        <article className="metric-card metric-card-pending">
-          <span className="metric-label">Awaiting first check</span>
-          <strong>{uncheckedCount}</strong>
-          <span className="metric-context">No persisted result yet</span>
+        <article className="metric-card metric-card-updated">
+          <span className="metric-label">Last updated</span>
+          <strong className="metric-date">{formattedLastUpdated}</strong>
+          <span className="metric-context">{uncheckedCount} awaiting first check</span>
         </article>
       </section>
 
