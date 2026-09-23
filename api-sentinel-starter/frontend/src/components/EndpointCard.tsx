@@ -44,7 +44,16 @@ export function EndpointCard({
     >
       <div className="endpoint-card-heading">
         <div>
-          <h2><Link to={`/endpoints/${endpoint.id}`}>{endpoint.name}</Link></h2>
+          <h2>
+            <Link
+              aria-disabled={actionsDisabled}
+              onClick={actionsDisabled ? (event) => event.preventDefault() : undefined}
+              tabIndex={actionsDisabled ? -1 : undefined}
+              to={`/endpoints/${endpoint.id}`}
+            >
+              {endpoint.name}
+            </Link>
+          </h2>
           <p className="endpoint-url">{endpoint.url}</p>
         </div>
         <StatusBadge status={status} />

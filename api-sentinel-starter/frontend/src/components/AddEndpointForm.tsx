@@ -17,7 +17,7 @@ function submitErrorMessage(error: unknown): string {
     }
 
     if (error.status === 422) {
-      return 'Enter a valid API name and HTTP/HTTPS URL.'
+      return error.message || 'Enter a valid API name and HTTP/HTTPS URL.'
     }
 
     return error.message
@@ -52,7 +52,7 @@ export function AddEndpointForm({ onCreated }: AddEndpointFormProps) {
       const endpoint = await createEndpoint({ name: trimmedName, url: trimmedUrl })
       setName('')
       setUrl('')
-      setSuccess(`${endpoint.name} was added and the dashboard has been updated.`)
+      setSuccess(`${endpoint.name} was added. Refreshing the dashboard data...`)
       onCreated()
     } catch (caughtError) {
       setError(submitErrorMessage(caughtError))

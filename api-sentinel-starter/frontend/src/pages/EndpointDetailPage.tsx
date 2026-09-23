@@ -43,7 +43,7 @@ function submitErrorMessage(error: unknown): string {
     }
 
     if (error.status === 422) {
-      return 'Enter a valid API name and HTTP/HTTPS URL.'
+      return error.message || 'Enter a valid API name and HTTP/HTTPS URL.'
     }
 
     return error.message
@@ -101,6 +101,15 @@ export function EndpointDetailPage() {
         }
       } catch (caughtError) {
         if (!controller.signal.aborted) {
+          if (caughtError instanceof ApiError && caughtError.status === 404) {
+            setDetail({
+              endpoint: null,
+              checks: [],
+            })
+            setError(null)
+            return
+          }
+
           setError(readableError(caughtError))
         }
       }
