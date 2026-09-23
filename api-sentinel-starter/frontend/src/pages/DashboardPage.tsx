@@ -61,6 +61,7 @@ export function DashboardPage() {
         if (!controller.signal.aborted) {
           setSummaries(latestChecks)
           setLastUpdatedAt(new Date().toISOString())
+          setActionError(null)
         }
       } catch (caughtError) {
         if (!controller.signal.aborted) {
