@@ -7,6 +7,7 @@ import { EmptyState } from '../components/EmptyState'
 import { ErrorState } from '../components/ErrorState'
 import { HistoryChart } from '../components/HistoryChart'
 import { LoadingState } from '../components/LoadingState'
+import { MonitoringTimeline } from '../components/MonitoringTimeline'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDateTime, formatLatency, formatStatusCode, getEndpointStatus } from '../utils/formatters'
 
@@ -71,7 +72,7 @@ export function EndpointDetailPage() {
   }
 
   if (!detail) {
-    return <LoadingState label="Loading endpoint details…" />
+    return <LoadingState label="Loading endpoint details and monitoring history..." title="Preparing endpoint history" />
   }
 
   if (!detail.endpoint) {
@@ -87,6 +88,12 @@ export function EndpointDetailPage() {
   const status = getEndpointStatus(latestCheck)
   const successfulChecks = detail.checks.filter((check) => check.success).length
   const failedChecks = detail.checks.length - successfulChecks
+  const availability = detail.checks.length > 0
+    ? `${((successfulChecks / detail.checks.length) * 100).toFixed(1)}%`
+    : '—'
+  const recentChecks = detail.checks.slice(0, 7).reverse()
+  const recentSuccesses = recentChecks.filter((check) => check.success).length
+  const recentFailures = recentChecks.length - recentSuccesses
 
   return (
     <div className="endpoint-detail-page">
@@ -146,6 +153,51 @@ export function EndpointDetailPage() {
       </section>
 
       {latestCheck?.error_message ? <p className="check-error detail-error">Latest check: {latestCheck.error_message}</p> : null}
+
+      <section className="availability-panel" aria-labelledby="availability-title">
+        <div className="availability-heading">
+          <div>
+            <p className="eyebrow">Availability</p>
+            <h2 id="availability-title">Reliable at a glance</h2>
+            <p>Calculated from the monitoring history currently available for this endpoint.</p>
+          </div>
+          <div className="availability-score">
+            <span>Success rate</span>
+            <strong>{availability}</strong>
+            <span>{detail.checks.length > 0 ? `${successfulChecks} successful of ${detail.checks.length} checks` : 'No checks recorded yet'}</span>
+          </div>
+        </div>
+        <div className="availability-recent" aria-label="Recent check summary">
+          <div className="availability-recent-copy">
+            <span className="metric-label">Last {recentChecks.length || 0} checks</span>
+            <strong>{recentChecks.length > 0 ? `${recentSuccesses} successful, ${recentFailures} failed` : 'Awaiting first check'}</strong>
+          </div>
+          {recentChecks.length > 0 ? (
+            <div className="availability-bars" aria-label={`${recentChecks.length} recent checks, oldest first`}>
+              {recentChecks.map((check) => (
+                <span
+                  key={check.id}
+                  className={check.success ? 'availability-bar availability-bar-success' : 'availability-bar availability-bar-failure'}
+                  title={`${formatDateTime(check.checked_at)}: ${check.success ? 'successful' : 'failed'}`}
+                />
+              ))}
+            </div>
+          ) : <span className="availability-empty">Run a check to start building availability data.</span>}
+        </div>
+      </section>
+
+      {detail.checks.length > 0 ? (
+        <section className="history-section" aria-labelledby="timeline-title">
+          <div className="section-heading">
+            <div>
+              <h2 id="timeline-title">Monitoring timeline</h2>
+              <p>Each recorded check includes its outcome, HTTP response, latency, and timestamp. The newest result appears first.</p>
+            </div>
+            <span className="endpoint-count">{detail.checks.length} recorded</span>
+          </div>
+          <MonitoringTimeline checks={detail.checks} />
+        </section>
+      ) : null}
 
       <section className="history-section" aria-labelledby="latency-title">
         <div className="section-heading">
