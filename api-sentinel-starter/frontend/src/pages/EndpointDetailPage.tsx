@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { listEndpointChecks, listEndpoints } from '../api/endpoints'
+import { checkEndpoint, listEndpointChecks, listEndpoints } from '../api/endpoints'
 import type { CheckResult, Endpoint } from '../api/types'
 import { EmptyState } from '../components/EmptyState'
 import { ErrorState } from '../components/ErrorState'
@@ -24,11 +24,21 @@ function readableError(error: unknown): string {
   return 'An unexpected error occurred while loading this endpoint.'
 }
 
+function readableActionError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message
+  }
+
+  return 'The endpoint could not be refreshed. Please try again.'
+}
+
 export function EndpointDetailPage() {
   const { endpointId } = useParams()
   const numericEndpointId = Number(endpointId)
   const [detail, setDetail] = useState<EndpointDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -95,6 +105,36 @@ export function EndpointDetailPage() {
   const recentSuccesses = recentChecks.filter((check) => check.success).length
   const recentFailures = recentChecks.length - recentSuccesses
 
+  async function handleRefresh() {
+    if (isRefreshing) {
+      return
+    }
+
+    setActionError(null)
+    setIsRefreshing(true)
+
+    try {
+      const check = await checkEndpoint(numericEndpointId)
+      setDetail((currentDetail) => {
+        if (!currentDetail) {
+          return currentDetail
+        }
+
+        return {
+          ...currentDetail,
+          checks: [
+            check,
+            ...currentDetail.checks.filter((historyItem) => historyItem.id !== check.id),
+          ].slice(0, 100),
+        }
+      })
+    } catch (caughtError) {
+      setActionError(readableActionError(caughtError))
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   return (
     <div className="endpoint-detail-page">
       <nav className="breadcrumb" aria-label="Breadcrumb">
@@ -113,11 +153,20 @@ export function EndpointDetailPage() {
         </div>
         <div className="detail-status">
           <StatusBadge status={status} />
-          <button className="button button-secondary" type="button" onClick={() => setRefreshKey((value) => value + 1)}>
-            Refresh data
+          <button
+            aria-busy={isRefreshing}
+            className="button button-secondary"
+            disabled={isRefreshing}
+            type="button"
+            onClick={handleRefresh}
+          >
+            {isRefreshing ? <span className="button-spinner" aria-hidden="true" /> : null}
+            {isRefreshing ? 'Refreshing...' : 'Refresh data'}
           </button>
         </div>
       </section>
+
+      {actionError ? <p className="form-message form-message-error" role="alert">{actionError}</p> : null}
 
       <section className="endpoint-info-grid" aria-label="Endpoint information">
         <article>

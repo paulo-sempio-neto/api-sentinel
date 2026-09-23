@@ -8,6 +8,7 @@ interface EndpointCardProps {
   index: number
   isChecking: boolean
   isDeleting: boolean
+  isRefreshing: boolean
   onDelete: (endpointId: number) => void
   onRunCheck: (endpointId: number) => void
 }
@@ -17,12 +18,14 @@ export function EndpointCard({
   index,
   isChecking,
   isDeleting,
+  isRefreshing,
   onDelete,
   onRunCheck,
 }: EndpointCardProps) {
   const { endpoint, history, latestCheck, status } = summary
   const recentChecks = history.slice(0, 7).reverse()
   const actionInProgress = isChecking || isDeleting
+  const actionsDisabled = actionInProgress || isRefreshing
   const successfulChecks = history.filter((check) => check.success).length
   const failedChecks = history.length - successfulChecks
   const recordedResponseTimes = history
@@ -35,8 +38,8 @@ export function EndpointCard({
 
   return (
     <article
-      aria-busy={actionInProgress}
-      className={`endpoint-card endpoint-card-${status}${actionInProgress ? ' endpoint-card-busy' : ''}`}
+      aria-busy={actionsDisabled}
+      className={`endpoint-card endpoint-card-${status}${actionsDisabled ? ' endpoint-card-busy' : ''}`}
       style={{ animationDelay: `${index * 55}ms` }}
     >
       <div className="endpoint-card-heading">
@@ -93,19 +96,25 @@ export function EndpointCard({
       <div className="endpoint-card-actions">
         <button
           className="button button-primary"
-          disabled={actionInProgress}
+          disabled={actionsDisabled}
           onClick={() => onRunCheck(endpoint.id)}
           type="button"
         >
           {isChecking ? <span className="button-spinner" aria-hidden="true" /> : null}
           {isChecking ? 'Checking...' : 'Run Check'}
         </button>
-        <Link className="button button-secondary" to={`/endpoints/${endpoint.id}`}>
+        <Link
+          aria-disabled={actionsDisabled}
+          className="button button-secondary"
+          onClick={actionsDisabled ? (event) => event.preventDefault() : undefined}
+          tabIndex={actionsDisabled ? -1 : undefined}
+          to={`/endpoints/${endpoint.id}`}
+        >
           View details
         </Link>
         <button
           className="button button-danger"
-          disabled={actionInProgress}
+          disabled={actionsDisabled}
           onClick={() => onDelete(endpoint.id)}
           type="button"
         >

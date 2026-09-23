@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { checkEndpoint, deleteEndpoint, listEndpointChecks, listEndpoints } from '../api/endpoints'
 import { ApiError } from '../api/client'
 import type { EndpointSummary } from '../api/types'
@@ -57,46 +57,43 @@ export function DashboardPage() {
     endpointId: number
     type: 'check' | 'delete'
   } | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  const loadDashboard = useCallback(async (signal?: AbortSignal) => {
+    const endpoints = await listEndpoints(signal)
+    const latestChecks = await Promise.all(
+      endpoints.map(async (endpoint) => {
+        const checks = await listEndpointChecks(endpoint.id, HISTORY_LIMIT, signal)
+        const latestCheck = checks[0] ?? null
+
+        return {
+          endpoint,
+          latestCheck,
+          history: checks,
+          status: getEndpointStatus(latestCheck),
+        }
+      }),
+    )
+
+    if (!signal?.aborted) {
+      setSummaries(latestChecks)
+      setLastUpdatedAt(new Date().toISOString())
+      setError(null)
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
 
-    async function loadDashboard() {
-      setError(null)
-
-      try {
-        const endpoints = await listEndpoints(controller.signal)
-        const latestChecks = await Promise.all(
-          endpoints.map(async (endpoint) => {
-            const checks = await listEndpointChecks(endpoint.id, HISTORY_LIMIT, controller.signal)
-            const latestCheck = checks[0] ?? null
-
-            return {
-              endpoint,
-              latestCheck,
-              history: checks,
-              status: getEndpointStatus(latestCheck),
-            }
-          }),
-        )
-
-        if (!controller.signal.aborted) {
-          setSummaries(latestChecks)
-          setLastUpdatedAt(new Date().toISOString())
-          setActionError(null)
-        }
-      } catch (caughtError) {
-        if (!controller.signal.aborted) {
-          setError(readableError(caughtError))
-        }
+    void loadDashboard(controller.signal).catch((caughtError: unknown) => {
+      if (!controller.signal.aborted) {
+        setError(readableError(caughtError))
       }
-    }
-
-    void loadDashboard()
+    })
 
     return () => controller.abort()
-  }, [refreshKey])
+  }, [loadDashboard, refreshKey])
 
   if (error) {
     return <ErrorState message={error} onRetry={() => setRefreshKey((value) => value + 1)} />
@@ -185,6 +182,35 @@ export function DashboardPage() {
     }
   }
 
+  async function handleRefresh() {
+    if (isRefreshing) {
+      return
+    }
+
+    setActionError(null)
+    setIsRefreshing(true)
+
+    try {
+      const endpoints = await listEndpoints()
+      const checkResults = await Promise.allSettled(
+        endpoints.map((endpoint) => checkEndpoint(endpoint.id)),
+      )
+
+      await loadDashboard()
+
+      const failedChecks = checkResults.filter((result) => result.status === 'rejected').length
+      if (failedChecks > 0) {
+        setActionError(
+          `Dashboard refreshed, but ${failedChecks} endpoint check${failedChecks === 1 ? '' : 's'} could not be started.`,
+        )
+      }
+    } catch (caughtError) {
+      setActionError(readableActionError(caughtError))
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   return (
     <div className="dashboard-page">
       <section className="dashboard-hero" aria-labelledby="dashboard-title">
@@ -195,8 +221,15 @@ export function DashboardPage() {
         </div>
         <div className="dashboard-hero-actions">
           <span className="data-source"><span aria-hidden="true" />Live API data</span>
-          <button className="button button-secondary" type="button" onClick={() => setRefreshKey((value) => value + 1)}>
-            Refresh data
+          <button
+            aria-busy={isRefreshing}
+            className="button button-secondary"
+            disabled={isRefreshing}
+            type="button"
+            onClick={handleRefresh}
+          >
+            {isRefreshing ? <span className="button-spinner" aria-hidden="true" /> : null}
+            {isRefreshing ? 'Refreshing...' : 'Refresh data'}
           </button>
         </div>
       </section>
@@ -264,6 +297,7 @@ export function DashboardPage() {
                   pendingAction?.endpointId === summary.endpoint.id
                   && pendingAction.type === 'delete'
                 }
+                isRefreshing={isRefreshing}
                 onDelete={handleDelete}
                 onRunCheck={handleRunCheck}
                 summary={summary}
