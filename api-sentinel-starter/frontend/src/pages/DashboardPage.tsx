@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { checkEndpoint, deleteEndpoint, listEndpointChecks, listEndpoints } from '../api/endpoints'
 import { ApiError } from '../api/client'
 import type { EndpointSummary } from '../api/types'
@@ -59,6 +59,7 @@ export function DashboardPage() {
   } | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const actionLockRef = useRef(false)
 
   const loadDashboard = useCallback(async (signal?: AbortSignal) => {
     const endpoints = await listEndpoints(signal)
@@ -95,7 +96,10 @@ export function DashboardPage() {
     return () => controller.abort()
   }, [loadDashboard, refreshKey])
 
-  if (error) {
+  const hasPendingEndpointAction = pendingAction !== null
+  const isDashboardActionInProgress = isRefreshing || hasPendingEndpointAction
+
+  if (error && !summaries) {
     return <ErrorState message={error} onRetry={() => setRefreshKey((value) => value + 1)} />
   }
 
@@ -116,9 +120,16 @@ export function DashboardPage() {
   const successRate = formatSuccessRate(successfulChecks, allChecks.length)
   const averageResponseTime = getAverageResponseTime(allChecks.map((check) => check.response_time_ms))
   const formattedLastCheck = latestCheck ? formatShortDateTime(latestCheck.checked_at) : 'Not checked yet'
+  const updateError = actionError ?? error
 
   async function handleRunCheck(endpointId: number) {
+    if (actionLockRef.current || isRefreshing) {
+      return
+    }
+
+    actionLockRef.current = true
     setActionError(null)
+    setError(null)
     setPendingAction({ endpointId, type: 'check' })
 
     try {
@@ -150,12 +161,13 @@ export function DashboardPage() {
     } catch (caughtError) {
       setActionError(readableActionError(caughtError))
     } finally {
+      actionLockRef.current = false
       setPendingAction(null)
     }
   }
 
   async function handleDelete(endpointId: number) {
-    if (!summaries) {
+    if (!summaries || actionLockRef.current || isRefreshing) {
       return
     }
 
@@ -166,7 +178,13 @@ export function DashboardPage() {
       return
     }
 
+    if (actionLockRef.current || isRefreshing) {
+      return
+    }
+
+    actionLockRef.current = true
     setActionError(null)
+    setError(null)
     setPendingAction({ endpointId, type: 'delete' })
 
     try {
@@ -178,16 +196,19 @@ export function DashboardPage() {
     } catch (caughtError) {
       setActionError(readableActionError(caughtError))
     } finally {
+      actionLockRef.current = false
       setPendingAction(null)
     }
   }
 
   async function handleRefresh() {
-    if (isRefreshing) {
+    if (actionLockRef.current || isRefreshing) {
       return
     }
 
+    actionLockRef.current = true
     setActionError(null)
+    setError(null)
     setIsRefreshing(true)
 
     try {
@@ -207,6 +228,7 @@ export function DashboardPage() {
     } catch (caughtError) {
       setActionError(readableActionError(caughtError))
     } finally {
+      actionLockRef.current = false
       setIsRefreshing(false)
     }
   }
@@ -224,7 +246,7 @@ export function DashboardPage() {
           <button
             aria-busy={isRefreshing}
             className="button button-secondary"
-            disabled={isRefreshing}
+            disabled={isDashboardActionInProgress}
             type="button"
             onClick={handleRefresh}
           >
@@ -277,7 +299,7 @@ export function DashboardPage() {
           </div>
           <span className="endpoint-count">{summaries.length} total</span>
         </div>
-        {actionError ? <p className="form-message form-message-error" role="alert">{actionError}</p> : null}
+        {updateError ? <p className="form-message form-message-error" role="alert">{updateError}</p> : null}
         {summaries.length === 0 ? (
           <EmptyState
             title="No endpoints are being monitored"
@@ -297,7 +319,7 @@ export function DashboardPage() {
                   pendingAction?.endpointId === summary.endpoint.id
                   && pendingAction.type === 'delete'
                 }
-                isRefreshing={isRefreshing}
+                isRefreshing={isDashboardActionInProgress}
                 onDelete={handleDelete}
                 onRunCheck={handleRunCheck}
                 summary={summary}
