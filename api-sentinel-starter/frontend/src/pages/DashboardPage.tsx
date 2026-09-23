@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { listEndpointChecks, listEndpoints } from '../api/endpoints'
+import { checkEndpoint, deleteEndpoint, listEndpointChecks, listEndpoints } from '../api/endpoints'
 import { ApiError } from '../api/client'
 import type { EndpointSummary } from '../api/types'
+import { AddEndpointForm } from '../components/AddEndpointForm'
 import { EmptyState } from '../components/EmptyState'
 import { EndpointCard } from '../components/EndpointCard'
 import { ErrorState } from '../components/ErrorState'
@@ -16,9 +17,22 @@ function readableError(error: unknown): string {
   return 'An unexpected error occurred while loading the dashboard.'
 }
 
+function readableActionError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message
+  }
+
+  return 'The action could not be completed. Please try again.'
+}
+
 export function DashboardPage() {
   const [summaries, setSummaries] = useState<EndpointSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<{
+    endpointId: number
+    type: 'check' | 'delete'
+  } | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -26,7 +40,6 @@ export function DashboardPage() {
 
     async function loadDashboard() {
       setError(null)
-      setSummaries(null)
 
       try {
         const endpoints = await listEndpoints(controller.signal)
@@ -71,6 +84,71 @@ export function DashboardPage() {
   const unhealthyCount = summaries.filter((summary) => summary.status === 'unhealthy').length
   const uncheckedCount = summaries.filter((summary) => summary.status === 'not_checked').length
 
+  async function handleRunCheck(endpointId: number) {
+    setActionError(null)
+    setPendingAction({ endpointId, type: 'check' })
+
+    try {
+      const check = await checkEndpoint(endpointId)
+      setSummaries((currentSummaries) => {
+        if (!currentSummaries) {
+          return currentSummaries
+        }
+
+        return currentSummaries.map((summary) => {
+          if (summary.endpoint.id !== endpointId) {
+            return summary
+          }
+
+          const history = [
+            check,
+            ...summary.history.filter((historyItem) => historyItem.id !== check.id),
+          ].slice(0, 7)
+
+          return {
+            ...summary,
+            latestCheck: check,
+            history,
+            status: getEndpointStatus(check),
+          }
+        })
+      })
+      setRefreshKey((value) => value + 1)
+    } catch (caughtError) {
+      setActionError(readableActionError(caughtError))
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  async function handleDelete(endpointId: number) {
+    if (!summaries) {
+      return
+    }
+
+    const endpoint = summaries.find((summary) => summary.endpoint.id === endpointId)?.endpoint
+    const endpointLabel = endpoint?.name ?? 'this endpoint'
+
+    if (!window.confirm(`Remove ${endpointLabel} from API Sentinel?`)) {
+      return
+    }
+
+    setActionError(null)
+    setPendingAction({ endpointId, type: 'delete' })
+
+    try {
+      await deleteEndpoint(endpointId)
+      setSummaries((currentSummaries) => (
+        currentSummaries?.filter((summary) => summary.endpoint.id !== endpointId) ?? currentSummaries
+      ))
+      setRefreshKey((value) => value + 1)
+    } catch (caughtError) {
+      setActionError(readableActionError(caughtError))
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
   return (
     <div className="dashboard-page">
       <section className="dashboard-hero" aria-labelledby="dashboard-title">
@@ -110,22 +188,41 @@ export function DashboardPage() {
         </article>
       </section>
 
+      <AddEndpointForm onCreated={() => setRefreshKey((value) => value + 1)} />
+
       <section aria-labelledby="endpoints-title">
         <div className="section-heading">
           <div className="section-heading-copy">
             <h2 id="endpoints-title">Endpoints</h2>
-            <p>Open an endpoint to inspect its recorded checks and latency history.</p>
+            <p>Run checks, inspect responses, or remove endpoints you no longer monitor.</p>
           </div>
           <span className="endpoint-count">{summaries.length} total</span>
         </div>
+        {actionError ? <p className="form-message form-message-error" role="alert">{actionError}</p> : null}
         {summaries.length === 0 ? (
           <EmptyState
             title="No endpoints are being monitored"
-            description="Create an endpoint through the existing API Sentinel interface, then return here to view its checks."
+            description="Use the form above to register an API URL. Once added, it will appear here with its latest status, response code, latency, and check time."
           />
         ) : (
           <div className="endpoint-list">
-            {summaries.map((summary, index) => <EndpointCard key={summary.endpoint.id} summary={summary} index={index} />)}
+            {summaries.map((summary, index) => (
+              <EndpointCard
+                key={summary.endpoint.id}
+                index={index}
+                isChecking={
+                  pendingAction?.endpointId === summary.endpoint.id
+                  && pendingAction.type === 'check'
+                }
+                isDeleting={
+                  pendingAction?.endpointId === summary.endpoint.id
+                  && pendingAction.type === 'delete'
+                }
+                onDelete={handleDelete}
+                onRunCheck={handleRunCheck}
+                summary={summary}
+              />
+            ))}
           </div>
         )}
       </section>

@@ -4,6 +4,15 @@ export interface Endpoint {
   url: string
 }
 
+export interface EndpointCreate {
+  name: string
+  url: string
+}
+
+export interface DeleteEndpointResponse {
+  message: string
+}
+
 export interface CheckResult {
   id: number
   endpoint_id: number

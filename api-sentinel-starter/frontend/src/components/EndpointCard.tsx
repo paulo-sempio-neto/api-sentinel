@@ -6,15 +6,28 @@ import { StatusBadge } from './StatusBadge'
 interface EndpointCardProps {
   summary: EndpointSummary
   index: number
+  isChecking: boolean
+  isDeleting: boolean
+  onDelete: (endpointId: number) => void
+  onRunCheck: (endpointId: number) => void
 }
 
-export function EndpointCard({ summary, index }: EndpointCardProps) {
+export function EndpointCard({
+  summary,
+  index,
+  isChecking,
+  isDeleting,
+  onDelete,
+  onRunCheck,
+}: EndpointCardProps) {
   const { endpoint, history, latestCheck, status } = summary
   const recentChecks = history.slice(0, 7).reverse()
+  const actionInProgress = isChecking || isDeleting
 
   return (
     <article
-      className={`endpoint-card endpoint-card-${status}`}
+      aria-busy={actionInProgress}
+      className={`endpoint-card endpoint-card-${status}${actionInProgress ? ' endpoint-card-busy' : ''}`}
       style={{ animationDelay: `${index * 55}ms` }}
     >
       <div className="endpoint-card-heading">
@@ -26,11 +39,11 @@ export function EndpointCard({ summary, index }: EndpointCardProps) {
       </div>
       <dl className="endpoint-stats">
         <div className="endpoint-stat-primary">
-          <dt>Current latency</dt>
+          <dt>Response time</dt>
           <dd>{formatLatency(latestCheck?.response_time_ms ?? null)}</dd>
         </div>
         <div>
-          <dt>Response</dt>
+          <dt>Last status code</dt>
           <dd>{latestCheck ? formatStatusCode(latestCheck.status_code) : 'No checks yet'}</dd>
         </div>
         <div>
@@ -53,9 +66,29 @@ export function EndpointCard({ summary, index }: EndpointCardProps) {
         ) : <span className="check-history-empty">No recorded checks</span>}
       </div>
       {latestCheck?.error_message ? <p className="check-error">{latestCheck.error_message}</p> : null}
-      <Link className="text-link" to={`/endpoints/${endpoint.id}`}>
-        View endpoint details <span aria-hidden="true">&rarr;</span>
-      </Link>
+      <div className="endpoint-card-actions">
+        <button
+          className="button button-primary"
+          disabled={actionInProgress}
+          onClick={() => onRunCheck(endpoint.id)}
+          type="button"
+        >
+          {isChecking ? <span className="button-spinner" aria-hidden="true" /> : null}
+          {isChecking ? 'Checking...' : 'Run Check'}
+        </button>
+        <Link className="button button-secondary" to={`/endpoints/${endpoint.id}`}>
+          View details
+        </Link>
+        <button
+          className="button button-danger"
+          disabled={actionInProgress}
+          onClick={() => onDelete(endpoint.id)}
+          type="button"
+        >
+          {isDeleting ? <span className="button-spinner" aria-hidden="true" /> : null}
+          {isDeleting ? 'Removing...' : 'Remove'}
+        </button>
+      </div>
     </article>
   )
 }
