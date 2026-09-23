@@ -2,14 +2,27 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, HttpUrl, StringConstraints
+from pydantic import BaseModel, Field, HttpUrl, StringConstraints, field_validator
+
+from services.url_safety import UnsafeUrlError, assert_safe_monitor_url
 
 
 class EndpointCreate(BaseModel):
     """Validated endpoint data used for creation and updates."""
 
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-    url: HttpUrl
+    name: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ]
+    url: Annotated[HttpUrl, Field(max_length=2048)]
+
+    @field_validator("url")
+    @classmethod
+    def reject_unsafe_monitor_url(cls, url: HttpUrl) -> HttpUrl:
+        try:
+            assert_safe_monitor_url(str(url), resolve=False)
+        except UnsafeUrlError as error:
+            raise ValueError(str(error)) from error
+        return url
 
 
 class HealthResponse(BaseModel):

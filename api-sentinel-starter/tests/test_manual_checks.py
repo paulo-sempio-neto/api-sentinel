@@ -138,6 +138,35 @@ def test_missing_endpoint_does_not_request_or_save(
         connection.close()
 
 
+def test_unsafe_stored_endpoint_does_not_request_but_is_persisted(
+    client: TestClient, mock_http
+) -> None:
+    connection = get_connection()
+    try:
+        cursor = connection.execute(
+            "INSERT INTO endpoints (name, url) VALUES (?, ?)",
+            ("Unsafe API", "http://127.0.0.1/internal"),
+        )
+        connection.commit()
+        endpoint_id = cursor.lastrowid
+    finally:
+        connection.close()
+
+    def unexpected_request(request):
+        pytest.fail("Unsafe endpoints must not cause an HTTP request")
+
+    requests = mock_http(unexpected_request)
+    response = client.post(f"/endpoints/{endpoint_id}/check")
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["success"] is False
+    assert result["status_code"] is None
+    assert result["error_message"] == "Endpoint URL is not allowed."
+    assert requests == []
+    assert get_check_history(endpoint_id) == [result]
+
+
 def test_each_manual_call_adds_exactly_one_result(
     client: TestClient, endpoint_id: int, mock_http
 ) -> None:

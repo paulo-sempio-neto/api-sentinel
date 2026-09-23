@@ -54,6 +54,47 @@ def test_reject_duplicate_url(client: TestClient, endpoint: dict) -> None:
     assert client.get("/endpoints").json() == [endpoint]
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:8000/health",
+        "http://127.0.0.1/health",
+        "http://10.0.0.1/health",
+        "http://172.16.0.1/health",
+        "http://192.168.1.1/health",
+        "http://169.254.169.254/latest/meta-data",
+        "http://metadata.google.internal/computeMetadata/v1/",
+        "http://internal-service/health",
+    ],
+)
+@pytest.mark.parametrize("method", ["POST", "PUT"])
+def test_reject_unsafe_monitor_urls(
+    client: TestClient, endpoint: dict, url: str, method: str
+) -> None:
+    path = "/endpoints" if method == "POST" else f"/endpoints/{endpoint['id']}"
+    response = client.request(method, path, json={"name": "Unsafe API", "url": url})
+
+    assert response.status_code == 422
+    assert any(error["loc"] == ["body", "url"] for error in response.json()["detail"])
+    assert client.get("/endpoints").json() == [endpoint]
+
+
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"name": "A" * 101, "url": "https://example.com/api"}, "name"),
+        ({"name": "Long URL", "url": f"https://example.com/{'a' * 2048}"}, "url"),
+    ],
+)
+def test_reject_oversized_endpoint_fields(
+    client: TestClient, payload: dict[str, str], field: str
+) -> None:
+    response = client.post("/endpoints", json=payload)
+
+    assert response.status_code == 422
+    assert any(error["loc"] == ["body", field] for error in response.json()["detail"])
+
+
 def test_update_endpoint(client: TestClient, endpoint: dict) -> None:
     response = client.put(
         f"/endpoints/{endpoint['id']}",

@@ -76,6 +76,9 @@ def test_application_allows_a_configured_cors_origin() -> None:
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://dashboard.example.test"
+    assert response.headers["access-control-allow-methods"] == (
+        "GET, POST, PUT, DELETE, OPTIONS"
+    )
 
 
 def test_json_formatter_includes_standard_and_contextual_fields() -> None:

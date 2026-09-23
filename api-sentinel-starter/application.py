@@ -28,8 +28,8 @@ def create_application(
             CORSMiddleware,
             allow_origins=list(cors_allowed_origins),
             allow_credentials=False,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Accept", "Content-Type"],
         )
     app.mount(
         "/static",

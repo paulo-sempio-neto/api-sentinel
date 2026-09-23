@@ -7,6 +7,7 @@ import httpx
 from fastapi import HTTPException, status
 
 import repositories
+from services.url_safety import UnsafeUrlError, assert_safe_monitor_url
 
 
 CheckResult = dict[str, int | float | str | bool | None]
@@ -33,6 +34,7 @@ def perform_endpoint_check(
     error_message = None
     started_at = timer()
     try:
+        assert_safe_monitor_url(str(endpoint["url"]))
         response = http_get(
             endpoint["url"],
             timeout=timeout_seconds,
@@ -40,6 +42,8 @@ def perform_endpoint_check(
             trust_env=False,
         )
         status_code = response.status_code
+    except UnsafeUrlError:
+        error_message = "Endpoint URL is not allowed."
     except httpx.TimeoutException:
         error_message = "Request timed out."
     except httpx.ConnectError:
