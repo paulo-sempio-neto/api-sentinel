@@ -15,4 +15,4 @@ services:
       - key: API_SENTINEL_DATABASE_PATH
         value: api_sentinel.db
       - key: API_SENTINEL_CORS_ALLOWED_ORIGINS
-        sync: false
+        value: https://api-sentinel-pi.vercel.app
