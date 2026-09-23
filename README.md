@@ -10,7 +10,7 @@ The project was built as a CS50x final project and evolved into a full-stack dem
 - **Backend/API Docs:** [api-sentinel-backend-5w2w.onrender.com/docs](https://api-sentinel-backend-5w2w.onrender.com/docs)
 - **Backend Health Check:** [api-sentinel-backend-5w2w.onrender.com/health](https://api-sentinel-backend-5w2w.onrender.com/health)
 - **GitHub Repository:** [github.com/paulo-sempio-neto/api-sentinel](https://github.com/paulo-sempio-neto/api-sentinel)
-- **CS50x Certificate:** Add the public certificate URL here when it is available.
+- **CS50x Certificate:** Available on request.
 
 ## Features
 
