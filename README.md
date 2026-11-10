@@ -15,24 +15,54 @@ The project was built as a CS50x final project and evolved into a full-stack dem
 ## Features
 
 - Register API endpoints with a name and HTTP/HTTPS URL.
-- List monitored endpoints in a responsive dashboard.
-- Run manual health checks from the dashboard.
+- See every endpoint on a live 3D latency radar: distance from the center is
+  average latency, beam height is uptime and color is the current status.
+- Read a status-page style overview with a plain-language headline, fleet
+  vitals and a 30-check uptime strip and latency sparkline per endpoint.
+- Keep data fresh automatically: the dashboard re-reads results every 30 seconds
+  while the tab is visible, without starting extra checks.
+- Run manual health checks from the dashboard, one at a time or all at once.
 - Show current status as `Operational`, `Issue detected`, or `Not checked`.
 - Display status code, response time, last check time, and recent check history.
-- View a dedicated endpoint detail page with response metrics and check history.
-- Delete endpoints with confirmation.
+- View a dedicated endpoint detail page with a 100-check availability strip you can
+  inspect bar by bar, success rate, average and 95th-percentile latency, an
+  interactive response-time chart and a filterable check log.
+- Add and edit endpoints in a side drawer; delete them through an accessible
+  confirmation dialog.
 - Handle duplicate URLs, validation errors, backend connection errors, and loading states.
 - Expose a documented JSON API through FastAPI/OpenAPI.
 
 ## Screenshots
 
-No screenshot images are currently committed to the repository. The live dashboard is available at the Vercel link above.
+<p align="center">
+  <img src="./docs/screenshots/overview.png" alt="Overview with the latency radar and endpoint list" width="100%" />
+</p>
+
+<table>
+  <tr>
+    <td><img src="./docs/screenshots/endpoint-detail.png" alt="Endpoint detail with availability strip and response-time chart" /></td>
+    <td align="center" width="32%"><img src="./docs/screenshots/mobile.png" alt="Overview on a phone" /></td>
+  </tr>
+</table>
+
+### Frontend design notes
+
+- **Latency radar.** Built with React Three Fiber. The sweep is a single fragment
+  shader; each endpoint is placed on a log scale (20 ms at the center, 5 s at the
+  rim). Hovering a blip shows its numbers and clicking opens its detail page.
+  Rendering pauses when the radar scrolls out of view, the 3D engine loads only
+  on the overview, and the page falls back to the list if WebGL is unavailable.
+- **Accessible by default.** Overlays trap focus, close with `Esc` and return
+  focus; the whole row is a single link target; charts carry text alternatives;
+  `prefers-reduced-motion` stops the sweep and entrance animations.
+- **Type.** Geist for the interface and Geist Mono only for real code values
+  such as URLs and HTTP status codes.
 
 ## Tech Stack
 
 | Layer | Technologies |
 | --- | --- |
-| Frontend | React, TypeScript, Vite, React Router, CSS |
+| Frontend | React, TypeScript, Vite, React Router, React Three Fiber (Three.js), Motion, Lucide, CSS |
 | Backend | Python, FastAPI, Pydantic, Uvicorn |
 | Database | SQLite |
 | HTTP checks | HTTPX |

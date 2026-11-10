@@ -1,0 +1,67 @@
+/*
+ * API Sentinel design tokens.
+ * A light instrument panel; the only dark surface is the radar scope.
+ */
+:root {
+  --mist: #eef2ef;
+  --mist-deep: #e2e8e4;
+  --paper: #ffffff;
+  --paper-sunk: #f6f8f7;
+  --ink: #0e1f1b;
+  --ink-soft: #33463f;
+  --slate: #66756f;
+  --slate-light: #97a49e;
+  --line: #d9e1dc;
+  --line-strong: #c2cdc6;
+
+  --signal: #0d7a68;
+  --signal-deep: #095f51;
+  --signal-wash: #dcf2ec;
+  --fail: #e5484d;
+  --fail-deep: #c22f35;
+  --fail-wash: #fde8e8;
+  --slow: #f2a93b;
+  --slow-deep: #a86a0c;
+  --slow-wash: #fdf1dc;
+
+  --scope: #0b1e1b;
+  --scope-raised: #12302b;
+  --phosphor: #4fe3c1;
+
+  --font-ui: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-code: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  --step--2: 0.75rem;
+  --step--1: 0.8125rem;
+  --step-0: 0.9375rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  --step-4: clamp(2rem, 1.5rem + 2vw, 2.75rem);
+  --step-5: clamp(2.4rem, 1.4rem + 3.6vw, 3.9rem);
+
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4.5rem;
+
+  --r-xs: 5px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  --shadow-1: 0 1px 2px rgb(14 31 27 / 6%);
+  --shadow-2: 0 10px 28px -12px rgb(14 31 27 / 22%), 0 2px 6px rgb(14 31 27 / 6%);
+  --shadow-3: 0 32px 64px -24px rgb(14 31 27 / 38%), 0 10px 22px -12px rgb(14 31 27 / 20%);
+  --focus: 0 0 0 2px var(--paper), 0 0 0 4px var(--signal);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-1: 120ms;
+  --dur-2: 220ms;
+  --dur-3: 420ms;
+}

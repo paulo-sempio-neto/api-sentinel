@@ -1,11 +1,20 @@
+import { ArrowLeft } from 'lucide-react'
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
 export function NotFoundPage() {
+  useEffect(() => {
+    document.title = 'Page not found · API Sentinel'
+  }, [])
+
   return (
-    <section className="state-panel empty-panel" aria-labelledby="not-found-title">
-      <h1 id="not-found-title">Page not found</h1>
-      <p>The page you requested is not part of the API Sentinel dashboard.</p>
-      <Link className="button button-secondary" to="/">Return to dashboard</Link>
-    </section>
+    <div className="empty empty--page">
+      <p className="empty__code code">404</p>
+      <h1>Nothing at this address</h1>
+      <p>The page you followed doesn’t exist. Your monitored endpoints are on the overview.</p>
+      <Link className="btn btn--secondary btn--md" to="/">
+        <ArrowLeft size={16} aria-hidden="true" /> Back to overview
+      </Link>
+    </div>
   )
 }

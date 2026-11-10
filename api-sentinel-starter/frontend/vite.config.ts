@@ -7,6 +7,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      // The 3D radar engine is a lazy chunk loaded only on the overview.
+      chunkSizeWarningLimit: 1000,
+    },
     server: {
       proxy: {
         '/api': {
